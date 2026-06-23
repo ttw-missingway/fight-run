@@ -1,0 +1,41 @@
+[gd_scene load_steps=6 format=3 uid="uid://fightarena001"]
+
+[ext_resource type="Script" path="res://scripts/fight/fight_arena.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/fight/fight_manager.gd" id="2"]
+[ext_resource type="PackedScene" path="res://ui/match_hud.tscn" id="3"]
+[ext_resource type="Script" path="res://scripts/fight/stage_geometry.gd" id="4"]
+[ext_resource type="Resource" path="res://scripts/resources/default_stage_profile.tres" id="5"]
+
+[node name="FightArena" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+offset_left = -920.0
+offset_top = -340.0
+offset_right = 920.0
+offset_bottom = 340.0
+color = Color(0.08, 0.09, 0.12, 1)
+
+[node name="Platform" type="StaticBody2D" parent="."]
+collision_layer = 1
+collision_mask = 0
+script = ExtResource("4")
+profile = ExtResource("5")
+
+[node name="StageFill" type="Polygon2D" parent="Platform"]
+
+[node name="PlayerSpawn" type="Marker2D" parent="."]
+position = Vector2(-420, 92)
+
+[node name="OpponentSpawn" type="Marker2D" parent="."]
+position = Vector2(420, 92)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(0, 24)
+zoom = Vector2(0.58, 0.58)
+current = true
+
+[node name="FightManager" type="Node" parent="."]
+script = ExtResource("2")
+
+[node name="MatchHUD" parent="." instance=ExtResource("3")]

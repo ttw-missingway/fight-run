@@ -1,0 +1,116 @@
+[gd_scene load_steps=8 format=3 uid="uid://fighter001"]
+
+[ext_resource type="Script" path="res://scripts/fight/fighter.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/fight/hurtbox.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/fight/hitbox.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/fight/grabbox.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/fight/ai_controller.gd" id="5"]
+[ext_resource type="Resource" path="res://scripts/resources/default_fighter_stats.tres" id="6"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(32, 56)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hit"]
+size = Vector2(28, 36)
+
+[node name="Fighter" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+floor_stop_on_slope = true
+script = ExtResource("1")
+stats = ExtResource("6")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -28)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="FacingPivot" type="Node2D" parent="."]
+
+[node name="BodyRect" type="ColorRect" parent="FacingPivot"]
+offset_left = -16.0
+offset_top = -56.0
+offset_right = 16.0
+color = Color(0.2, 0.45, 0.95, 1)
+
+[node name="GuardIndicator" type="ColorRect" parent="FacingPivot"]
+visible = false
+offset_left = 6.0
+offset_top = -52.0
+offset_right = 20.0
+offset_bottom = -10.0
+color = Color(0.92, 0.96, 1, 0.95)
+
+[node name="IFrameOverlay" type="ColorRect" parent="FacingPivot"]
+visible = false
+offset_left = -16.0
+offset_top = -56.0
+offset_right = 16.0
+mouse_filter = 2
+color = Color(0.15, 0.82, 1, 0.8)
+
+[node name="VFrameOverlay" type="ColorRect" parent="FacingPivot"]
+visible = false
+offset_left = -16.0
+offset_top = -56.0
+offset_right = 16.0
+mouse_filter = 2
+color = Color(1, 0.05, 0.45, 0.85)
+
+[node name="Hurtbox" type="Area2D" parent="FacingPivot"]
+collision_layer = 4
+collision_mask = 0
+monitorable = true
+monitoring = false
+script = ExtResource("2")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FacingPivot/Hurtbox"]
+position = Vector2(0, -28)
+shape = SubResource("RectangleShape2D_body")
+
+[node name="HurtboxDebug" type="ColorRect" parent="FacingPivot/Hurtbox"]
+visible = false
+offset_left = -16.0
+offset_top = -56.0
+offset_right = 16.0
+color = Color(0.2, 1, 0.2, 0.35)
+
+[node name="Hitbox" type="Area2D" parent="FacingPivot"]
+collision_layer = 8
+collision_mask = 4
+monitorable = false
+monitoring = false
+script = ExtResource("3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FacingPivot/Hitbox"]
+position = Vector2(36, -8)
+shape = SubResource("RectangleShape2D_hit")
+
+[node name="HitboxDebug" type="ColorRect" parent="FacingPivot/Hitbox"]
+visible = false
+offset_left = 22.0
+offset_top = -26.0
+offset_right = 50.0
+offset_bottom = 10.0
+color = Color(1, 0.2, 0.2, 0.35)
+
+[node name="Grabbox" type="Area2D" parent="FacingPivot"]
+collision_layer = 8
+collision_mask = 4
+monitorable = false
+monitoring = false
+script = ExtResource("4")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="FacingPivot/Grabbox"]
+position = Vector2(30, -28)
+shape = SubResource("RectangleShape2D_hit")
+
+[node name="GrabboxDebug" type="ColorRect" parent="FacingPivot/Grabbox"]
+visible = false
+offset_left = 16.0
+offset_top = -46.0
+offset_right = 44.0
+offset_bottom = -10.0
+color = Color(1, 0.75, 0.1, 0.35)
+
+[node name="AiController" type="Node" parent="."]
+script = ExtResource("5")

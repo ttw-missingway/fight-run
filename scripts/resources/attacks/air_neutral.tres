@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "air_neutral"
+knockback = 120.0
+stagger_value = 4
+is_juggle_attack = true
+startup_frames = 4
+active_frames = 14
+recovery_frames_whiff = 16
+recovery_frames_hit = 11
+recovery_frames_block = 18
+hitstun_seconds = 0.48
+landing_lag_frames = 10
+hitbox_offset = Vector2(18, -20)
+hitbox_size = Vector2(54, 38)
+hitstop_frames = 5
+juggle_pop_velocity = -75.0
+juggle_knockback_scale = 0.22

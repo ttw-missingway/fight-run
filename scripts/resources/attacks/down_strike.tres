@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "down_strike"
+knockback = 210.0
+hit_type = 0
+stagger_value = 10
+keeps_crouch = true
+launch_velocity = -400.0
+startup_frames = 6
+active_frames = 5
+recovery_frames_whiff = 16
+recovery_frames_hit = 4
+recovery_frames_block = 8
+hitstun_seconds = 0.69
+hitbox_offset = Vector2(34, -8)
+hitbox_size = Vector2(38, 24)

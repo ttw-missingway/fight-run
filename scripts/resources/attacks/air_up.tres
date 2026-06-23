@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "air_up"
+knockback = 280.0
+stagger_value = 8
+is_anti_air = true
+startup_frames = 5
+active_frames = 7
+recovery_frames_whiff = 18
+recovery_frames_hit = 12
+recovery_frames_block = 20
+hitstun_seconds = 0.50
+landing_lag_frames = 10
+hitbox_offset = Vector2(8, -48)
+hitbox_size = Vector2(36, 32)

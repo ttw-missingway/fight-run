@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "air_overhead"
+knockback = 265.0
+is_overhead = true
+startup_frames = 2
+active_frames = 8
+recovery_frames_whiff = 14
+recovery_frames_hit = 9
+recovery_frames_block = 16
+hitstun_seconds = 0.52
+landing_lag_frames = 8
+hitbox_offset = Vector2(14, 10)
+hitbox_size = Vector2(58, 44)

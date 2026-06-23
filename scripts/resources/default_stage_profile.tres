@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="StageProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/stage_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+half_width = 720.0
+slope_width = 68.0
+center_flat_half_width = 260.0
+edge_ground_y = 92.0
+center_ground_y = 115.0
+floor_thickness = 56.0
+gameplay_inset = 24.0

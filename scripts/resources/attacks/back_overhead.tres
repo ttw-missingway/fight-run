@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "back_overhead"
+knockback = 285.0
+is_overhead = true
+startup_frames = 12
+active_frames = 7
+recovery_frames_whiff = 22
+recovery_frames_hit = 12
+recovery_frames_block = 24
+hitstun_seconds = 0.54
+hitbox_offset = Vector2(50, -18)
+hitbox_size = Vector2(54, 46)
+ground_advance_speed = 175.0

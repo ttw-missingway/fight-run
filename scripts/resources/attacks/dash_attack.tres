@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+[ext_resource type="Resource" path="res://scripts/resources/attacks/jab_2.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "dash_attack"
+knockback = 295.0
+hit_type = 0
+stagger_value = 14
+is_dash_attack = true
+startup_frames = 5
+active_frames = 9
+recovery_frames_whiff = 48
+recovery_frames_hit = 14
+recovery_frames_block = 44
+hitstun_seconds = 0.62
+hitbox_offset = Vector2(52, -22)
+hitbox_size = Vector2(58, 46)
+ground_advance_speed = 340.0
+combo_follow_up = ExtResource("2")
+combo_link_frame = 14

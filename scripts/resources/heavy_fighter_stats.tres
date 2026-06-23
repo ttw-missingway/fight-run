@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="FighterStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/fighter_stats.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_lives = 3
+weight = 1.35
+body_push_factor = 22.0
+move_speed = 210.0
+air_move_speed = 175.0
+jump_velocity = -460.0
+short_hop_velocity = -300.0
+super_jump_velocity = -550.0
+dash_speed = 540.0
+dash_duration = 0.09
+dash_ground_duration = 0.12
+dash_recovery_duration = 0.07
+dash_air_momentum_carry = 0.35
+block_knockback_multiplier = 1.8
+crouch_block_knockback_multiplier = 0.35
+projectile_block_knockback_multiplier = 1.05
+knockdown_launch_velocity = -320.0
+knockdown_gravity_scale = 0.82
+air_knockdown_pop_velocity = -420.0
+air_knockdown_horizontal_scale = 0.68
+stagger_hitstun_duration = 0.48
+stagger_knockback_multiplier = 1.0
+stagger_meter_knockdown = 30
+juggle_gravity_scale = 0.62
+fast_fall_gravity_scale = 4.0
+fast_fall_max_velocity = 1280.0
+air_attack_landing_lag_frames = 10
+stun_hitstun_duration = 0.62
+stun_air_spike_velocity = 520.0
+crouch_move_scale = 0.55
+ledge_hang_offset_y = 22.0
+ledge_grab_range = 64.0
+wakeup_roll_distance = 180.0
+wakeup_roll_duration = 0.54
+slow_getup_duration = 0.72
+slow_getup_invincible_duration = 0.48
+gravity = 980.0

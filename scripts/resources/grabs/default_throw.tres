@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="GrabData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/grab_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "throw"
+startup_frames = 12
+active_frames = 4
+recovery_frames = 16
+whiff_recovery_frames = 44
+grab_offset = Vector2(30, -28)
+grab_size = Vector2(36, 40)
+throw_knockback = 450.0
+grab_advance_speed = 0.0
+grab_hold_offset = 24.0

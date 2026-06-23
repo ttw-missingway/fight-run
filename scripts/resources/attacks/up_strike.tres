@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "up_strike"
+knockback = 240.0
+startup_frames = 5
+active_frames = 5
+recovery_frames_whiff = 14
+recovery_frames_hit = 10
+recovery_frames_block = 17
+hitstun_seconds = 0.48
+hitbox_offset = Vector2(10, -46)
+hitbox_size = Vector2(28, 26)

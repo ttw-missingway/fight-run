@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "air_forward"
+knockback = 130.0
+stagger_value = 10
+startup_frames = 4
+active_frames = 5
+recovery_frames_whiff = 12
+recovery_frames_hit = 3
+recovery_frames_block = 14
+hitstun_seconds = 0.62
+landing_lag_frames = 8
+hitbox_offset = Vector2(42, -24)
+hitbox_size = Vector2(36, 28)
+air_advance_speed = 185.0
+is_juggle_attack = true
+hitstop_frames = 6
+juggle_pop_velocity = -220.0
+juggle_knockback_scale = 0.3
+attacker_juggle_pop_velocity = -190.0
+attacker_juggle_pop_forward = 120.0
+combo_link_frame = 9

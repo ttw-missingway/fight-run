@@ -206,7 +206,7 @@ func clear_action(action: String) -> void:
 
 
 func is_up_held() -> bool:
-	return Input.is_action_pressed("move_up")
+	return Input.is_action_pressed("move_up") or GamepadInput.is_up_pressed()
 
 
 func is_attack_held() -> bool:

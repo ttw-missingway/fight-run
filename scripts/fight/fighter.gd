@@ -65,6 +65,7 @@ var _hitstop_frames: int = 0
 var _hit_flash_timer: float = 0.0
 var _air_forward_combo_step: int = 0
 var _jump_hold_frames: int = 0
+var _gamepad_up_was_held: bool = false
 
 const W_GETUP_HOLD_THRESHOLD := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
 const EXTERNAL_DISPLACEMENT_FRAMES := 12
@@ -250,6 +251,8 @@ func _physics_process(delta: float) -> void:
 		_external_displacement_frames -= 1
 	if is_on_floor():
 		_clear_air_forward_combo()
+	if is_player_controlled:
+		_gamepad_up_was_held = GamepadInput.is_up_pressed()
 
 
 func _clear_air_forward_combo() -> void:
@@ -424,7 +427,9 @@ func is_crouch_held() -> bool:
 
 func _is_crouch_intent_held() -> bool:
 	if is_player_controlled:
-		return Input.is_action_pressed("move_down") or _virtual_down
+		if Input.is_action_pressed("move_down") or _virtual_down:
+			return true
+		return GamepadInput.is_down_pressed()
 	return _virtual_down
 
 
@@ -2413,13 +2418,17 @@ func _get_move_direction() -> int:
 
 func _is_left_pressed() -> bool:
 	if is_player_controlled:
-		return Input.is_action_pressed("move_left") or _virtual_left
+		if Input.is_action_pressed("move_left") or _virtual_left:
+			return true
+		return GamepadInput.get_move_direction() < 0
 	return _virtual_left
 
 
 func _is_right_pressed() -> bool:
 	if is_player_controlled:
-		return Input.is_action_pressed("move_right") or _virtual_right
+		if Input.is_action_pressed("move_right") or _virtual_right:
+			return true
+		return GamepadInput.get_move_direction() > 0
 	return _virtual_right
 
 
@@ -2448,7 +2457,7 @@ func _is_up_intent_held() -> bool:
 func _is_up_intent_just_pressed() -> bool:
 	if not is_player_controlled:
 		return false
-	return Input.is_action_just_pressed("move_up")
+	return Input.is_action_just_pressed("move_up") or _gamepad_up_just_pressed()
 
 
 func _just_pressed_throw() -> bool:
@@ -2458,7 +2467,11 @@ func _just_pressed_throw() -> bool:
 func _just_pressed_up() -> bool:
 	if is_player_controlled and Input.is_action_just_pressed("move_up"):
 		return true
-	return false
+	return is_player_controlled and _gamepad_up_just_pressed()
+
+
+func _gamepad_up_just_pressed() -> bool:
+	return GamepadInput.is_up_pressed() and not _gamepad_up_was_held
 
 
 func _attack_has_lunge() -> bool:

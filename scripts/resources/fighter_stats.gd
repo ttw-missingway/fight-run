@@ -1,5 +1,11 @@
-extends Resource
 class_name FighterStats
+extends Resource
+
+
+## The character's visual rig: a Node2D scene with an AnimatedSprite2D and the
+## CharacterAnimator script. Instanced under the Fighter's FacingPivot at spawn.
+## Leave null to fall back to the placeholder BodyRect.
+@export var visual_scene: PackedScene
 
 @export var max_lives: int = 3
 @export var weight: float = 1.0
@@ -39,3 +45,11 @@ class_name FighterStats
 @export var slow_getup_invincible_duration: float = 0.45
 @export var gravity: float = 980.0
 @export var projectile_config: ProjectileConfig = preload("res://scripts/resources/default_projectile_config.tres")
+# Per-character move set. Leave any field empty to inherit the shared default
+# (see DEFAULT_* consts in fighter.gd). This is what makes a fighter's identity
+# pure data: swap the .tres, swap the moves — no code changes.
+# attacks maps an action name (e.g. "neutral", "forward", "air_up") -> AttackData.
+@export var attacks: Dictionary = {}
+@export var dash_attack: AttackData
+@export var grab_data: GrabData
+@export var wakeup_attack: AttackData

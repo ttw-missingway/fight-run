@@ -89,7 +89,7 @@ static func get_move_direction() -> int:
 	var deadzone := N64_STICK_DEADZONE if is_n64_adapter_device(device) else STICK_DEADZONE
 	var stick_x := _read_stick_x(device)
 	if absf(stick_x) >= deadzone:
-		return signi(stick_x) if stick_x != 0.0 else 0
+		return int(signf(stick_x)) if stick_x != 0.0 else 0
 	if _is_any_pressed(device, N64_DPAD_FALLBACK["left"]):
 		return -1
 	if _is_any_pressed(device, N64_DPAD_FALLBACK["right"]):
@@ -153,14 +153,14 @@ static func poll_debug_lines(device: int = -1) -> PackedStringArray:
 static func _read_stick_x(device: int) -> float:
 	var value := Input.get_joy_axis(device, JOY_AXIS_LEFT_X)
 	if absf(value) < 0.001:
-		value = Input.get_joy_axis(device, 0)
+		value = Input.get_joy_axis(device, 0 as JoyAxis)
 	return value
 
 
 static func _read_stick_y(device: int) -> float:
 	var value := Input.get_joy_axis(device, JOY_AXIS_LEFT_Y)
 	if absf(value) < 0.001:
-		value = Input.get_joy_axis(device, 1)
+		value = Input.get_joy_axis(device, 1 as JoyAxis)
 	return value
 
 

@@ -10,8 +10,8 @@ var _hit_victims: Dictionary = {}
 
 const PROJECTILE_LAYER := 16
 
-func setup(owner: CharacterBody2D) -> void:
-	owner_fighter = owner
+func setup(owner_body: CharacterBody2D) -> void:
+	owner_fighter = owner_body
 	collision_layer = 8
 	collision_mask = 4 | PROJECTILE_LAYER
 	monitoring = false

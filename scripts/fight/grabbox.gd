@@ -8,8 +8,8 @@ var grab_data: Resource
 var _grabbed_victims: Dictionary = {}
 
 
-func setup(owner: CharacterBody2D) -> void:
-	owner_fighter = owner
+func setup(owner_body: CharacterBody2D) -> void:
+	owner_fighter = owner_body
 	collision_layer = 8
 	collision_mask = 4
 	monitoring = false

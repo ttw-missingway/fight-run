@@ -3,12 +3,13 @@ extends Node2D
 const FIGHTER_SCENE := preload("res://scenes/fight/fighter.tscn")
 
 @export var stage_profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
-@export var player_stats: FighterStats = preload("res://scripts/resources/default_fighter_stats.tres")
-@export var opponent_stats: FighterStats = preload("res://scripts/resources/heavy_fighter_stats.tres")
+@export var player_stats: FighterStats = preload("res://scripts/resources/knight_fighter_stats.tres")
+@export var opponent_stats: FighterStats = preload("res://scripts/resources/minotaur_fighter_stats.tres")
 @export var debug_hitboxes: bool = true
 
 @onready var fight_manager: FightManager = $FightManager
 @onready var match_hud: CanvasLayer = $MatchHUD
+@onready var training_hud: CanvasLayer = $TrainingHUD
 @onready var player_spawn: Marker2D = $PlayerSpawn
 @onready var opponent_spawn: Marker2D = $OpponentSpawn
 @onready var stage_geometry: StageGeometry = $Platform
@@ -16,8 +17,18 @@ const FIGHTER_SCENE := preload("res://scenes/fight/fighter.tscn")
 var _player: Fighter
 var _opponent: Fighter
 
+# Character picks persist across reload_current_scene(), so a selection made in
+# the TrainingHUD survives the match restart that applies it.
+static var _selected_player_stats: FighterStats
+static var _selected_opponent_stats: FighterStats
+
 
 func _ready() -> void:
+	if _selected_player_stats != null:
+		player_stats = _selected_player_stats
+	if _selected_opponent_stats != null:
+		opponent_stats = _selected_opponent_stats
+
 	if stage_geometry != null:
 		stage_geometry.apply_profile(stage_profile)
 	fight_manager.configure_stage(stage_profile)
@@ -35,9 +46,13 @@ func _ready() -> void:
 	match_hud.restart_requested.connect(_restart_match)
 
 	match_hud.setup(player, opponent)
-	match_hud.ai_mode_selected.connect(_on_ai_mode_selected)
-	match_hud.infinite_mode_toggled.connect(_on_infinite_mode_toggled)
-	match_hud.debug_knockdown_requested.connect(_debug_knockdown_player)
+	training_hud.ai_mode_selected.connect(_on_ai_mode_selected)
+	training_hud.infinite_mode_toggled.connect(_on_infinite_mode_toggled)
+	training_hud.debug_knockdown_requested.connect(_debug_knockdown_player)
+	training_hud.input_buffer_toggled.connect(_on_input_buffer_toggled)
+	training_hud.player_character_selected.connect(_on_player_character_selected)
+	training_hud.ai_character_selected.connect(_on_ai_character_selected)
+	training_hud.set_active_characters(player_stats, opponent_stats)
 	_on_lives_changed(player, player.lives)
 	_on_lives_changed(opponent, opponent.lives)
 	_set_debug_visibility(debug_hitboxes)
@@ -76,11 +91,16 @@ func _on_ai_mode_selected(mode: int) -> void:
 	if _opponent == null:
 		return
 	_opponent.ai_controller.set_behavior_mode(mode as AiController.BehaviorMode)
-	match_hud.set_active_ai_mode(mode)
+	training_hud.set_active_ai_mode(mode)
 
 
 func _on_infinite_mode_toggled(enabled: bool) -> void:
 	fight_manager.infinite_lives = enabled
+	match_hud.set_infinite_lives(enabled)
+
+
+func _on_input_buffer_toggled(enabled: bool) -> void:
+	match_hud.set_input_buffer_visible(enabled)
 
 
 func _set_debug_visibility(enabled: bool) -> void:
@@ -96,6 +116,28 @@ func _on_lives_changed(fighter: Fighter, lives: int) -> void:
 func _on_match_over(winner: Fighter, _loser: Fighter) -> void:
 	var label := "You Win!" if winner.is_player_controlled else "You Lose!"
 	match_hud.show_result(label)
+
+
+func _on_player_character_selected(stats: FighterStats) -> void:
+	if stats == player_stats:
+		return
+	_selected_player_stats = stats
+	_reload_with_characters()
+
+
+func _on_ai_character_selected(stats: FighterStats) -> void:
+	if stats == opponent_stats:
+		return
+	_selected_opponent_stats = stats
+	_reload_with_characters()
+
+
+# Applies a character pick by restarting the match. The pick is already stored in
+# the static fields, so it carries over into the freshly reloaded arena.
+func _reload_with_characters() -> void:
+	if PauseMenu.is_open():
+		PauseMenu.close()
+	get_tree().reload_current_scene()
 
 
 func _restart_match() -> void:

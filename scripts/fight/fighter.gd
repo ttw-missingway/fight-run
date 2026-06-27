@@ -15,10 +15,6 @@ signal state_changed(fighter: Fighter, state_name: String)
 @export var is_player_controlled: bool = true
 
 const STATE_MACHINE_SCRIPT := preload("res://scripts/fight/fighter_state_machine.gd")
-const FightInputBuffer := preload("res://scripts/fight/input_buffer.gd")
-const GrabData := preload("res://scripts/resources/grab_data.gd")
-const FightGrabbox := preload("res://scripts/fight/grabbox.gd")
-const FightProjectile := preload("res://scripts/fight/projectile.gd")
 const PROJECTILE_SCENE := preload("res://scenes/fight/projectile.tscn")
 
 var facing: int = 1
@@ -105,7 +101,7 @@ var _input_buffer: FightInputBuffer
 
 func _ready() -> void:
 	if stats == null:
-		stats = preload("res://scripts/resources/default_fighter_stats.tres")
+		stats = preload("res://scripts/resources/knight_fighter_stats.tres")
 	lives = stats.max_lives
 
 	state_machine = STATE_MACHINE_SCRIPT.new()
@@ -120,8 +116,7 @@ func _ready() -> void:
 	grabbox.grab_landed.connect(_on_grab_landed)
 
 	_load_attacks()
-	_wakeup_attack = preload("res://scripts/resources/attacks/wakeup_attack.tres")
-	_grab = preload("res://scripts/resources/grabs/default_throw.tres")
+	_instance_visual_rig()
 	_input_buffer = FightInputBuffer.new()
 	_split_shared_collision_shapes()
 	_setup_stagger_meter_label()
@@ -153,31 +148,57 @@ func _setup_stagger_meter_label() -> void:
 func _update_stagger_meter_display() -> void:
 	if stagger_meter_label == null:
 		return
-	var show := state_machine.stagger_meter > 0 and (
+	var should_show := state_machine.stagger_meter > 0 and (
 		state_machine.current_state == FighterStateMachine.State.STAGGER
 		or not is_on_floor()
 	)
-	stagger_meter_label.visible = show
-	if show:
+	stagger_meter_label.visible = should_show
+	if should_show:
 		stagger_meter_label.text = str(state_machine.stagger_meter)
 
+# Shared fallbacks. A character's FighterStats can override any of these; when a
+# stats field is left empty we drop back to these so existing characters keep
+# working unchanged.
+const DEFAULT_ATTACKS := {
+	"neutral": preload("res://scripts/resources/attacks/jab.tres"),
+	"forward": preload("res://scripts/resources/attacks/forward_strike.tres"),
+	"down": preload("res://scripts/resources/attacks/down_strike.tres"),
+	"anti_air": preload("res://scripts/resources/attacks/anti_air.tres"),
+	"back_overhead": preload("res://scripts/resources/attacks/back_overhead.tres"),
+	"back_retreat": preload("res://scripts/resources/attacks/back_retreat.tres"),
+	"air_neutral": preload("res://scripts/resources/attacks/air_neutral.tres"),
+	"air_forward": preload("res://scripts/resources/attacks/air_forward.tres"),
+	"air_forward_2": preload("res://scripts/resources/attacks/air_forward_2.tres"),
+	"air_forward_3": preload("res://scripts/resources/attacks/air_forward_3.tres"),
+	"air_overhead": preload("res://scripts/resources/attacks/air_overhead.tres"),
+	"air_up": preload("res://scripts/resources/attacks/air_up.tres"),
+}
+const DEFAULT_DASH_ATTACK := preload("res://scripts/resources/attacks/dash_attack.tres")
+const DEFAULT_WAKEUP_ATTACK := preload("res://scripts/resources/attacks/wakeup_attack.tres")
+const DEFAULT_GRAB := preload("res://scripts/resources/grabs/default_throw.tres")
 
+
+# Builds this fighter's move set from its stats Resource, falling back to the
+# shared defaults for any field the character data leaves unset.
 func _load_attacks() -> void:
-	_attacks = {
-		"neutral": preload("res://scripts/resources/attacks/jab.tres"),
-		"forward": preload("res://scripts/resources/attacks/forward_strike.tres"),
-		"down": preload("res://scripts/resources/attacks/down_strike.tres"),
-		"anti_air": preload("res://scripts/resources/attacks/anti_air.tres"),
-		"back_overhead": preload("res://scripts/resources/attacks/back_overhead.tres"),
-		"back_retreat": preload("res://scripts/resources/attacks/back_retreat.tres"),
-		"air_neutral": preload("res://scripts/resources/attacks/air_neutral.tres"),
-		"air_forward": preload("res://scripts/resources/attacks/air_forward.tres"),
-		"air_forward_2": preload("res://scripts/resources/attacks/air_forward_2.tres"),
-		"air_forward_3": preload("res://scripts/resources/attacks/air_forward_3.tres"),
-		"air_overhead": preload("res://scripts/resources/attacks/air_overhead.tres"),
-		"air_up": preload("res://scripts/resources/attacks/air_up.tres"),
-	}
-	_dash_attack = preload("res://scripts/resources/attacks/dash_attack.tres")
+	if stats != null and not stats.attacks.is_empty():
+		_attacks = stats.attacks.duplicate()
+	else:
+		_attacks = DEFAULT_ATTACKS.duplicate()
+	_dash_attack = stats.dash_attack if stats != null and stats.dash_attack != null else DEFAULT_DASH_ATTACK
+	_wakeup_attack = stats.wakeup_attack if stats != null and stats.wakeup_attack != null else DEFAULT_WAKEUP_ATTACK
+	_grab = stats.grab_data if stats != null and stats.grab_data != null else DEFAULT_GRAB
+
+
+# Instances the character's visual rig (stats.visual_scene) under FacingPivot so
+# it flips with the fighter and is driven by its CharacterAnimator. Characters
+# without a rig keep the placeholder BodyRect as a fallback.
+func _instance_visual_rig() -> void:
+	if stats == null or stats.visual_scene == null:
+		body_rect.visible = true
+		return
+	facing_pivot.add_child(stats.visual_scene.instantiate())
+	body_rect.visible = false
 
 
 func get_dash_attack() -> AttackData:
@@ -478,8 +499,8 @@ func _apply_gravity(delta: float) -> void:
 	if state_machine.is_on_ledge():
 		return
 	if state_machine.is_knockdown_falling():
-		var gravity_scale := 1.0 if state_machine.knockdown_from_throw else stats.knockdown_gravity_scale
-		velocity.y += stats.gravity * gravity_scale * delta
+		var kd_gravity_scale := 1.0 if state_machine.knockdown_from_throw else stats.knockdown_gravity_scale
+		velocity.y += stats.gravity * kd_gravity_scale * delta
 		return
 	var gravity_scale := 1.0
 	if _uses_juggle_gravity():
@@ -797,11 +818,11 @@ func resolve_buffered_attack_name(snap: Dictionary) -> String:
 			return "air_overhead"
 		if snap.get("up", false):
 			return "air_up"
-		var move_dir := int(snap.get("move_dir", 0))
-		var snap_facing := int(snap.get("facing", facing))
-		if move_dir != 0 and move_dir == -snap_facing:
+		var air_move_dir := int(snap.get("move_dir", 0))
+		var air_snap_facing := int(snap.get("facing", facing))
+		if air_move_dir != 0 and air_move_dir == -air_snap_facing:
 			return "back_retreat"
-		if move_dir == snap_facing:
+		if air_move_dir == air_snap_facing:
 			return _get_air_forward_chain_attack()
 		return "air_neutral"
 	if not is_on_floor():
@@ -1325,8 +1346,8 @@ func _poll_wakeup_w_getup(from_ledge: bool, buffering: bool = false) -> void:
 		return
 
 	if _is_jump_getup_held():
-		var held := Time.get_ticks_msec() / 1000.0 - _w_getup_press_time
-		if held >= W_GETUP_HOLD_THRESHOLD:
+		var jump_hold_time := Time.get_ticks_msec() / 1000.0 - _w_getup_press_time
+		if jump_hold_time >= W_GETUP_HOLD_THRESHOLD:
 			_queue_prone_wakeup(from_ledge, FighterStateMachine.WakeupOption.JUMP, buffering)
 			_reset_wakeup_w_press()
 		return
@@ -1428,7 +1449,7 @@ func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
 	if state_machine.is_grabbing():
 		set_grabbox_active(false)
 
-	var direction: int = signi(global_position.x - attacker.global_position.x)
+	var direction: int = int(signf(global_position.x - attacker.global_position.x))
 	if direction == 0:
 		direction = attacker.facing
 
@@ -2343,11 +2364,11 @@ func _resolve_body_collision(other: Fighter, delta: float) -> void:
 		var self_pushable := _can_body_push()
 		var other_pushable := other._can_body_push()
 		if self_pushable or other_pushable:
-			var self_weight := stats.weight
-			var other_weight := other.stats.weight
-			var total_weight := self_weight + other_weight
-			var self_share := other_weight / total_weight if self_pushable else 0.0
-			var other_share := self_weight / total_weight if other_pushable else 0.0
+			var push_self_w := stats.weight
+			var push_other_w := other.stats.weight
+			var push_total_w := push_self_w + push_other_w
+			var self_share := push_other_w / push_total_w if self_pushable else 0.0
+			var other_share := push_self_w / push_total_w if other_pushable else 0.0
 			if global_position.x < other.global_position.x:
 				if self_pushable:
 					global_position.x -= overlap * self_share
@@ -2635,3 +2656,5 @@ func _consume_attack_input() -> String:
 
 func _clear_pending_attack_input() -> void:
 	_virtual_attack_name = ""
+
+# Dylan is a menace.

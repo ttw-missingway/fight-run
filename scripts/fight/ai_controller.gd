@@ -416,7 +416,7 @@ func _decide_simple_grab(distance: float) -> void:
 		_attack_cooldown = CombatTiming.scale_time(randf_range(0.55, 0.9))
 
 
-func _decide_simple_projectile(distance: float) -> void:
+func _decide_simple_projectile(_distance: float) -> void:
 	if _attack_cooldown > 0.0:
 		return
 	if randf() < 0.2 and _fighter.is_on_floor():

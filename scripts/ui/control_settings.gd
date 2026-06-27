@@ -349,20 +349,20 @@ static func _deserialize_event(data: Dictionary) -> InputEvent:
 
 static func _make_key_event(physical_keycode: int) -> InputEventKey:
 	var ev := InputEventKey.new()
-	ev.physical_keycode = physical_keycode
+	ev.physical_keycode = physical_keycode as Key
 	return ev
 
 
 static func _make_joy_button_event(button_index: int) -> InputEventJoypadButton:
 	var ev := InputEventJoypadButton.new()
-	ev.button_index = button_index
+	ev.button_index = button_index as JoyButton
 	ev.device = -1
 	return ev
 
 
 static func _make_joy_motion_event(axis: int, axis_value: float) -> InputEventJoypadMotion:
 	var ev := InputEventJoypadMotion.new()
-	ev.axis = axis
+	ev.axis = axis as JoyAxis
 	ev.axis_value = axis_value
 	ev.device = -1
 	return ev

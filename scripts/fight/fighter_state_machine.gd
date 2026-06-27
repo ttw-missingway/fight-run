@@ -738,7 +738,7 @@ func begin_knockdown_impulse(
 	knockdown_landed_at = 0.0
 	has_buffered_prone_wakeup = false
 	clear_oki_punish_window()
-	knockdown_lie_direction = signi(impulse.x)
+	knockdown_lie_direction = int(signf(impulse.x))
 	if knockdown_lie_direction == 0:
 		knockdown_lie_direction = signi((_fighter as Fighter).facing)
 		if knockdown_lie_direction == 0:

@@ -32,9 +32,9 @@ func _ready() -> void:
 	area_entered.connect(_on_area_entered)
 
 
-func setup(owner: Fighter, charge: float, config: ProjectileConfig, low_angle: bool = false) -> void:
-	owner_fighter = owner
-	direction = owner.facing
+func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_angle: bool = false) -> void:
+	owner_fighter = from_fighter
+	direction = from_fighter.facing
 	charge_ratio = clampf(charge, 0.0, 1.0)
 	is_low_angle = low_angle
 
@@ -51,10 +51,10 @@ func setup(owner: Fighter, charge: float, config: ProjectileConfig, low_angle: b
 	size_value = maxf(size.x, size.y)
 	_apply_size(size)
 
-	var spawn_offset := _resolve_spawn_offset(config, owner.is_on_floor())
-	global_position = owner.global_position + Vector2(spawn_offset.x * direction, spawn_offset.y)
+	var spawn_offset := _resolve_spawn_offset(config, from_fighter.is_on_floor())
+	global_position = from_fighter.global_position + Vector2(spawn_offset.x * direction, spawn_offset.y)
 
-	body_rect.color = owner.body_color.lightened(0.35)
+	body_rect.color = from_fighter.body_color.lightened(0.35)
 
 	for area in get_overlapping_areas():
 		_on_area_entered(area)
@@ -105,8 +105,8 @@ func destroy() -> void:
 	if _destroyed:
 		return
 	_destroyed = true
-	monitoring = false
-	monitorable = false
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
 	queue_free()
 
 

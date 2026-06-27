@@ -50,48 +50,6 @@ offset_bottom = 96.0
 theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
 text = "State: BLOCK"
 
-[node name="AiModeButton" type="Button" parent="Control"]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -148.0
-offset_top = 12.0
-offset_right = -16.0
-offset_bottom = 44.0
-grow_horizontal = 0
-text = "AI: Dummy"
-
-[node name="DebugKnockdownButton" type="Button" parent="Control"]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -148.0
-offset_top = 50.0
-offset_right = -16.0
-offset_bottom = 82.0
-grow_horizontal = 0
-text = "Knock Down (K)"
-
-[node name="ControlsLabel" type="Label" parent="Control"]
-layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -420.0
-offset_top = -36.0
-offset_right = 420.0
-offset_bottom = -8.0
-grow_horizontal = 2
-grow_vertical = 0
-theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
-theme_override_font_sizes/font_size = 14
-text = "Controls"
-horizontal_alignment = 1
-
 [node name="ResultPanel" type="PanelContainer" parent="Control"]
 visible = false
 layout_mode = 1

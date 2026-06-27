@@ -1,0 +1,36 @@
+[gd_scene format=3 uid="uid://dkn014cludlup"]
+
+[ext_resource type="Script" uid="uid://da0nq1up2puhi" path="res://scripts/ui/training_hud.gd" id="1_bbyro"]
+
+[node name="TrainingHUD" type="CanvasLayer" unique_id=251186674]
+process_mode = 3
+layer = 130
+script = ExtResource("1_bbyro")
+
+[node name="AiSelectorPanel" type="PanelContainer" parent="." unique_id=873259817]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -184.0
+offset_top = 88.0
+offset_right = -8.0
+offset_bottom = 468.0
+grow_horizontal = 0
+
+[node name="VBox" type="VBoxContainer" parent="AiSelectorPanel" unique_id=153018026]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="InfiniteToggle" type="CheckButton" parent="AiSelectorPanel/VBox" unique_id=667726765]
+layout_mode = 2
+text = "Infinite Lives"
+
+[node name="Scroll" type="ScrollContainer" parent="AiSelectorPanel/VBox" unique_id=883340183]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Inner" type="VBoxContainer" parent="AiSelectorPanel/VBox/Scroll" unique_id=606121874]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4

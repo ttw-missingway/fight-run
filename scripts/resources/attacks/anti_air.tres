@@ -5,13 +5,15 @@
 [resource]
 script = ExtResource("1")
 id = "anti_air"
-knockback = 260.0
+knockback = 280.0
+hit_type = 0
+stagger_value = 9
 is_anti_air = true
-startup_frames = 6
-active_frames = 6
-recovery_frames_whiff = 18
+startup_frames = 5
+active_frames = 7
+recovery_frames_whiff = 20
 recovery_frames_hit = 12
-recovery_frames_block = 20
+recovery_frames_block = 22
 hitstun_seconds = 0.50
-hitbox_offset = Vector2(12, -52)
-hitbox_size = Vector2(32, 34)
+hitbox_offset = Vector2(6, -50)
+hitbox_size = Vector2(44, 46)

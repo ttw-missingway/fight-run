@@ -207,12 +207,21 @@ func reset_stagger_meter() -> void:
 	(_fighter as Fighter)._update_stagger_meter_display()
 
 
+func was_hit_by_attack_serial(attacker: Fighter) -> bool:
+	var serial := attacker.state_machine.attack_hit_serial
+	var attacker_id := attacker.get_instance_id()
+	return _stagger_hit_serial_by_attacker.get(attacker_id, -1) == serial
+
+
 func apply_stagger_hit(
 	attacker: Fighter,
 	stagger_value: int,
 	horizontal_kb: float,
 	hitstun_seconds: float
 ) -> bool:
+	var fighter := _fighter as Fighter
+	if not fighter.is_on_floor() and fighter.is_juggle_hit_locked():
+		return false
 	var serial := attacker.state_machine.attack_hit_serial
 	var attacker_id := attacker.get_instance_id()
 	if _stagger_hit_serial_by_attacker.get(attacker_id, -1) == serial:
@@ -238,6 +247,9 @@ func apply_stagger_hit_with_launch(
 	hitstun_seconds: float,
 	launch_velocity: float
 ) -> bool:
+	var fighter := _fighter as Fighter
+	if not fighter.is_on_floor() and fighter.is_juggle_hit_locked():
+		return false
 	var serial := attacker.state_machine.attack_hit_serial
 	var attacker_id := attacker.get_instance_id()
 	if _stagger_hit_serial_by_attacker.get(attacker_id, -1) == serial:
@@ -520,6 +532,8 @@ func start_attack(attack_data: Resource) -> void:
 	state_time = 0.0
 	combo_follow_up_buffered = null
 	var attack := attack_data as AttackData
+	if attack != null and attack.auto_chain_follow_up and attack.combo_follow_up != null:
+		combo_follow_up_buffered = attack.combo_follow_up
 	var fighter := _fighter as Fighter
 	if attack != null and attack.keeps_crouch and (is_crouching() or fighter.is_crouch_held()):
 		if not is_crouching():
@@ -756,13 +770,18 @@ func enter_stagger(
 	stun_started_airborne = false
 	clear_oki_punish_window()
 	var fighter := _fighter as Fighter
+	var new_duration: float
 	if hitstun_seconds < 0.0:
-		stagger_hitstun_duration = CombatTiming.scale_time(fighter.stats.stagger_hitstun_duration)
+		new_duration = CombatTiming.scale_time(fighter.stats.stagger_hitstun_duration)
 	else:
-		stagger_hitstun_duration = CombatTiming.scaled_hitstun(hitstun_seconds)
+		new_duration = CombatTiming.scaled_hitstun(hitstun_seconds)
 	if current_state == State.STAGGER:
-		state_time = 0.0
+		var remaining := stagger_hitstun_duration - state_time
+		if new_duration > remaining:
+			stagger_hitstun_duration = new_duration
+			state_time = 0.0
 	else:
+		stagger_hitstun_duration = new_duration
 		change_state(State.STAGGER)
 	if fighter.is_on_floor():
 		fighter.velocity = Vector2(horizontal_kb, vertical_kb)
@@ -776,6 +795,67 @@ func get_stagger_hitstun_progress() -> float:
 	if current_state != State.STAGGER or stagger_hitstun_duration <= 0.0:
 		return 1.0
 	return clampf(state_time / stagger_hitstun_duration, 0.0, 1.0)
+
+
+func exit_stagger_from_combo_break() -> void:
+	if current_state != State.STAGGER:
+		return
+	reset_stagger_meter()
+	hitstun_velocity_x = 0.0
+	(_fighter as Fighter).velocity.x = 0.0
+	if (_fighter as Fighter).is_on_floor():
+		(_fighter as Fighter).velocity.y = 0.0
+	(_fighter as Fighter).resolve_standing_state()
+
+
+func exit_grab_from_combo_break() -> void:
+	if current_state != State.GRABBED:
+		return
+	grabbed_by = null
+	current_grab = null
+	lethal_punish_throw = false
+	(_fighter as Fighter).velocity = Vector2.ZERO
+	(_fighter as Fighter).resolve_standing_state()
+
+
+func interrupt_attack_from_combo_break() -> void:
+	if current_state != State.ATTACK:
+		return
+	current_attack = null
+	attack_contact = ATTACK_CONTACT_NONE
+	attack_recovery_frames = 0
+	attack_landing_lag_time = 0.0
+	attack_landing_lag_applied = false
+	(_fighter as Fighter).set_hitbox_active(false)
+	change_state(State.IDLE)
+
+
+func interrupt_grab_from_combo_break() -> void:
+	if current_state != State.GRAB:
+		return
+	grab_victim = null
+	current_grab = null
+	grab_landed = false
+	grab_in_recovery = false
+	grab_whiffed = false
+	(_fighter as Fighter).set_grabbox_active(false)
+	change_state(State.IDLE)
+
+
+func enter_combo_break_push(horizontal_kb: float) -> void:
+	hitstun_velocity_x = horizontal_kb
+	stun_started_airborne = false
+	clear_oki_punish_window()
+	var fighter := _fighter as Fighter
+	stagger_hitstun_duration = CombatTiming.scale_time(fighter.stats.combo_break_slide_duration)
+	if current_state == State.STAGGER:
+		state_time = 0.0
+	else:
+		change_state(State.STAGGER)
+	if fighter.is_on_floor():
+		fighter.velocity = Vector2(horizontal_kb, 0.0)
+	else:
+		fighter.velocity.x = horizontal_kb
 
 
 func enter_stun(horizontal_kb: float, spike_in_air: bool) -> void:
@@ -1232,10 +1312,14 @@ func _tick_attack() -> void:
 	var link_frame := attack.get_combo_link_frame()
 	var recovery_end_frame := active_end_frame + attack_recovery_frames
 	if frame >= link_frame and frame < recovery_end_frame:
-		var next_attack := (_fighter as Fighter).consume_combo_follow_up()
-		if next_attack != null:
-			start_attack(next_attack)
-			return
+		if (
+			not attack.combo_requires_contact
+			or attack_contact != ATTACK_CONTACT_NONE
+		):
+			var next_attack := (_fighter as Fighter).consume_combo_follow_up()
+			if next_attack != null:
+				start_attack(next_attack)
+				return
 
 	if frame >= recovery_end_frame:
 		_finish_attack()

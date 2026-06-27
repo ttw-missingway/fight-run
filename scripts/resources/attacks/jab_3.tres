@@ -5,14 +5,15 @@
 [resource]
 script = ExtResource("1")
 id = "jab_3"
-knockback = 185.0
+knockback = 210.0
 hit_type = 0
-stagger_value = 4
+stagger_value = 10
 startup_frames = 5
-active_frames = 5
-recovery_frames_whiff = 24
-recovery_frames_hit = 5
+active_frames = 6
+recovery_frames_whiff = 26
+recovery_frames_hit = 6
 recovery_frames_block = 22
 hitstun_seconds = 0.55
-hitbox_offset = Vector2(38, -26)
-hitbox_size = Vector2(28, 30)
+hitbox_offset = Vector2(44, -24)
+hitbox_size = Vector2(36, 34)
+ground_advance_speed = 420.0

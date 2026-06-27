@@ -5,7 +5,7 @@ const FIGHTER_SCENE := preload("res://scenes/fight/fighter.tscn")
 @export var stage_profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
 @export var player_stats: FighterStats = preload("res://scripts/resources/default_fighter_stats.tres")
 @export var opponent_stats: FighterStats = preload("res://scripts/resources/heavy_fighter_stats.tres")
-@export var debug_hitboxes: bool = true
+@export var debug_hitboxes: bool = false
 
 @onready var fight_manager: FightManager = $FightManager
 @onready var match_hud: CanvasLayer = $MatchHUD
@@ -32,14 +32,18 @@ func _ready() -> void:
 	fight_manager.setup(self, player, opponent)
 	fight_manager.match_over.connect(_on_match_over)
 	fight_manager.lives_changed.connect(_on_lives_changed)
+	fight_manager.mana_changed.connect(_on_mana_changed)
 	match_hud.restart_requested.connect(_restart_match)
 
 	match_hud.setup(player, opponent)
 	match_hud.ai_mode_selected.connect(_on_ai_mode_selected)
 	match_hud.infinite_mode_toggled.connect(_on_infinite_mode_toggled)
+	match_hud.infinite_mana_toggled.connect(_on_infinite_mana_toggled)
 	match_hud.debug_knockdown_requested.connect(_debug_knockdown_player)
 	_on_lives_changed(player, player.lives)
 	_on_lives_changed(opponent, opponent.lives)
+	_on_mana_changed(player, player.mana)
+	_on_mana_changed(opponent, opponent.mana)
 	_set_debug_visibility(debug_hitboxes)
 
 
@@ -81,6 +85,14 @@ func _on_ai_mode_selected(mode: int) -> void:
 
 func _on_infinite_mode_toggled(enabled: bool) -> void:
 	fight_manager.infinite_lives = enabled
+
+
+func _on_infinite_mana_toggled(enabled: bool) -> void:
+	fight_manager.infinite_mana = enabled
+
+
+func _on_mana_changed(fighter: Fighter, mana: int) -> void:
+	match_hud.update_mana(fighter, mana)
 
 
 func _set_debug_visibility(enabled: bool) -> void:

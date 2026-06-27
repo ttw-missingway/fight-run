@@ -83,23 +83,22 @@ func capture_action_intents(fighter: Fighter) -> void:
 		or is_recent("grab")
 	)
 	if throw_fresh and is_attack_held() and is_guard_held():
-		_enqueue(Intent.THROW)
-		clear_action("attack")
-		clear_action("guard")
-		clear_action("grab")
+		if fighter.can_attempt_throw():
+			_enqueue(Intent.THROW)
+			clear_action("attack")
+			clear_action("guard")
+			clear_action("grab")
 		return
 
 	if Input.is_action_just_pressed("grab"):
-		_enqueue(Intent.THROW)
+		if fighter.can_attempt_throw():
+			_enqueue(Intent.THROW)
 		clear_action("grab")
 		return
 
 	if Input.is_action_just_pressed("attack"):
 		var snap := fighter.build_input_snapshot()
-		if fighter.is_on_floor() and (snap.get("up", false) or is_recent("move_up")):
-			snap["attack_name"] = "anti_air"
-		else:
-			snap["attack_name"] = fighter.resolve_buffered_attack_name(snap)
+		snap["attack_name"] = fighter.resolve_buffered_attack_name(snap)
 		_enqueue(Intent.ATTACK, snap)
 		clear_action("attack")
 		return
@@ -123,6 +122,11 @@ func capture_action_intents(fighter: Fighter) -> void:
 	if Input.is_action_just_pressed("jump") and not is_attack_held():
 		_enqueue(Intent.JUMP)
 		clear_action("jump")
+		return
+
+	if Input.is_action_just_pressed("move_up") and fighter.is_on_floor() and not is_attack_held():
+		_enqueue(Intent.JUMP)
+		clear_action("move_up")
 
 
 func enqueue_dash(direction: int) -> void:

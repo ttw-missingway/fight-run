@@ -24,6 +24,7 @@ const PROJECTILE_SCENE := preload("res://scenes/fight/projectile.tscn")
 var facing: int = 1
 var opponent: Fighter
 var lives: int = 3
+var mana: int = 3
 var air_dash_used: bool = false
 var _last_move_tap_direction: int = 0
 var _last_move_tap_time: float = -1.0
@@ -50,6 +51,7 @@ var _virtual_jump_short: bool = true
 var _virtual_attack_name: String = ""
 var _virtual_guard: bool = false
 var _virtual_down: bool = false
+var _virtual_down_pulse: bool = false
 var _virtual_throw: bool = false
 var _virtual_projectile_charge: float = -1.0
 var _virtual_projectile_low: bool = false
@@ -63,16 +65,21 @@ var _w_getup_press_time: float = -1.0
 var _external_displacement_frames: int = 0
 var _hitstop_frames: int = 0
 var _hit_flash_timer: float = 0.0
-var _air_forward_combo_step: int = 0
 var _jump_hold_frames: int = 0
 var _gamepad_up_was_held: bool = false
+var _fast_fall_armed_at: float = -1.0
+var _fast_fall_consumed: bool = false
+var _juggle_hit_lockout: float = 0.0
 
 const W_GETUP_HOLD_THRESHOLD := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
 const EXTERNAL_DISPLACEMENT_FRAMES := 12
+const COMBO_BREAK_DISPLACEMENT_FRAMES := 24
 const JUGGLE_ADVANCE_KNOCKBACK_RATIO := 1.0
 const DEFAULT_JUGGLE_KNOCKBACK_SCALE := 0.35
 const HIT_FLASH_DURATION := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
 const FULL_HOP_HOLD_FRAMES := 4
+const FAST_FALL_INPUT_WINDOW := 0.11 * CombatTiming.FIGHT_TIMING_SCALE
+const JUGGLE_HIT_LOCKOUT_FRAMES := 16
 
 var state_machine: FighterStateMachine
 var fight_manager: FightManager
@@ -107,6 +114,7 @@ func _ready() -> void:
 	if stats == null:
 		stats = preload("res://scripts/resources/default_fighter_stats.tres")
 	lives = stats.max_lives
+	mana = stats.max_mana
 
 	state_machine = STATE_MACHINE_SCRIPT.new()
 	state_machine.name = "StateMachine"
@@ -165,15 +173,13 @@ func _update_stagger_meter_display() -> void:
 func _load_attacks() -> void:
 	_attacks = {
 		"neutral": preload("res://scripts/resources/attacks/jab.tres"),
-		"forward": preload("res://scripts/resources/attacks/forward_strike.tres"),
+		"forward": preload("res://scripts/resources/attacks/forward_shoryu.tres"),
 		"down": preload("res://scripts/resources/attacks/down_strike.tres"),
 		"anti_air": preload("res://scripts/resources/attacks/anti_air.tres"),
 		"back_overhead": preload("res://scripts/resources/attacks/back_overhead.tres"),
 		"back_retreat": preload("res://scripts/resources/attacks/back_retreat.tres"),
 		"air_neutral": preload("res://scripts/resources/attacks/air_neutral.tres"),
 		"air_forward": preload("res://scripts/resources/attacks/air_forward.tres"),
-		"air_forward_2": preload("res://scripts/resources/attacks/air_forward_2.tres"),
-		"air_forward_3": preload("res://scripts/resources/attacks/air_forward_3.tres"),
 		"air_overhead": preload("res://scripts/resources/attacks/air_overhead.tres"),
 		"air_up": preload("res://scripts/resources/attacks/air_up.tres"),
 	}
@@ -220,10 +226,12 @@ func _physics_process(delta: float) -> void:
 	_update_ledge_climb_animation()
 	_apply_gravity(delta)
 	_poll_double_tap_dash()
+	_poll_combo_break_input()
 	_apply_movement(delta)
 	_handle_projectile_input(delta)
 	_poll_dash_attack_input()
 	_update_jump_hold_tracking()
+	_track_fast_fall_window()
 	_handle_actions()
 	_sync_grabbed_position()
 	move_and_slide()
@@ -249,47 +257,10 @@ func _physics_process(delta: float) -> void:
 		_hit_flash_timer = maxf(0.0, _hit_flash_timer - delta)
 	if _external_displacement_frames > 0:
 		_external_displacement_frames -= 1
-	if is_on_floor():
-		_clear_air_forward_combo()
+	if _juggle_hit_lockout > 0.0:
+		_juggle_hit_lockout = maxf(0.0, _juggle_hit_lockout - delta)
 	if is_player_controlled:
 		_gamepad_up_was_held = GamepadInput.is_up_pressed()
-
-
-func _clear_air_forward_combo() -> void:
-	_air_forward_combo_step = 0
-
-
-func _get_air_forward_chain_attack() -> String:
-	match _air_forward_combo_step:
-		1:
-			return "air_forward_2"
-		2:
-			return "air_forward_3"
-		_:
-			return "air_forward"
-
-
-func _register_air_forward_combo_hit(attack_data: AttackData, victim: Fighter) -> void:
-	if not attack_data.id.begins_with("air_forward"):
-		return
-	if (
-		victim == null
-		or victim.is_on_floor()
-		or victim.state_machine.is_knockdown_falling()
-		or victim.state_machine.current_state == FighterStateMachine.State.KNOCKDOWN
-	):
-		_clear_air_forward_combo()
-		return
-	if victim.state_machine.current_state != FighterStateMachine.State.STAGGER:
-		_clear_air_forward_combo()
-		return
-	match attack_data.id:
-		"air_forward":
-			_air_forward_combo_step = 1
-		"air_forward_2":
-			_air_forward_combo_step = 2
-		"air_forward_3":
-			_clear_air_forward_combo()
 
 
 func _uses_juggle_gravity() -> bool:
@@ -313,10 +284,10 @@ func _is_juggle_pursuing() -> bool:
 
 
 func _get_jump_velocity() -> float:
-	if _wants_super_jump() and Input.is_action_pressed("jump"):
+	if _wants_super_jump() and _is_jump_intent_held():
 		return stats.super_jump_velocity
 	if is_player_controlled:
-		if Input.is_action_pressed("jump"):
+		if _is_jump_intent_held():
 			return stats.jump_velocity
 		return stats.short_hop_velocity
 	if _virtual_jump_short:
@@ -324,12 +295,22 @@ func _get_jump_velocity() -> float:
 	return stats.jump_velocity
 
 
+func _is_jump_intent_held() -> bool:
+	if not is_player_controlled:
+		return false
+	return (
+		Input.is_action_pressed("jump")
+		or Input.is_action_pressed("move_up")
+		or GamepadInput.is_up_pressed()
+	)
+
+
 func _update_jump_hold_tracking() -> void:
 	if not is_player_controlled or not is_on_floor():
 		return
 	if not _was_on_floor_last_frame:
 		_jump_hold_frames = 0
-	if Input.is_action_pressed("jump"):
+	if _is_jump_intent_held():
 		_jump_hold_frames += 1
 	else:
 		_jump_hold_frames = 0
@@ -339,8 +320,8 @@ func _can_takeoff_buffered_jump() -> bool:
 	if not is_on_floor():
 		return false
 	if _wants_super_jump():
-		return Input.is_action_pressed("jump")
-	if not Input.is_action_pressed("jump"):
+		return _is_jump_intent_held()
+	if not _is_jump_intent_held():
 		return true
 	return _jump_hold_frames >= FULL_HOP_HOLD_FRAMES
 
@@ -353,6 +334,17 @@ func _wants_super_jump() -> bool:
 
 func mark_external_displacement(frames: int = EXTERNAL_DISPLACEMENT_FRAMES) -> void:
 	_external_displacement_frames = maxi(_external_displacement_frames, frames)
+
+
+func is_juggle_hit_locked() -> bool:
+	return _juggle_hit_lockout > 0.0
+
+
+func apply_juggle_hit_lockout(frames: int = JUGGLE_HIT_LOCKOUT_FRAMES) -> void:
+	_juggle_hit_lockout = maxf(
+		_juggle_hit_lockout,
+		CombatTiming.frames_to_seconds(frames)
+	)
 
 
 func apply_hitstop(frames: int) -> void:
@@ -495,6 +487,15 @@ func _apply_gravity(delta: float) -> void:
 		_apply_fast_fall(delta, gravity_scale)
 
 
+func _track_fast_fall_window() -> void:
+	if is_on_floor():
+		_fast_fall_armed_at = -1.0
+		_fast_fall_consumed = false
+		return
+	if _has_passed_jump_apex() and _fast_fall_armed_at < 0.0:
+		_fast_fall_armed_at = Time.get_ticks_msec() / 1000.0
+
+
 func _has_passed_jump_apex() -> bool:
 	return not is_on_floor() and velocity.y >= 0.0
 
@@ -521,7 +522,21 @@ func _can_use_fast_fall() -> bool:
 
 
 func _wants_fast_fall() -> bool:
-	return _is_down_pressed()
+	if _fast_fall_consumed or _fast_fall_armed_at < 0.0:
+		return false
+	var elapsed := Time.get_ticks_msec() / 1000.0 - _fast_fall_armed_at
+	if elapsed > FAST_FALL_INPUT_WINDOW:
+		return false
+	if not _just_pressed_down_for_fast_fall():
+		return false
+	_fast_fall_consumed = true
+	return true
+
+
+func _just_pressed_down_for_fast_fall() -> bool:
+	if not is_player_controlled:
+		return false
+	return Input.is_action_just_pressed("move_down") or _input_buffer.is_recent("move_down", 1)
 
 
 func _apply_fast_fall(delta: float, gravity_scale: float) -> void:
@@ -552,7 +567,10 @@ func _apply_movement(delta: float) -> void:
 		FighterStateMachine.State.ATTACK, FighterStateMachine.State.BLOCK:
 			var advance := _get_attack_advance()
 			if advance != 0.0:
-				velocity.x = facing * advance
+				if is_on_floor():
+					velocity.x = facing * advance
+				else:
+					_apply_air_attack_advance(advance, delta)
 			elif is_on_floor():
 				var friction_scale := 3.0
 				if _attack_has_lunge():
@@ -664,6 +682,24 @@ func _apply_air_control(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, stats.air_move_speed * 3.0 * delta)
 
 
+func _apply_air_attack_advance(advance: float, delta: float) -> void:
+	_apply_forward_momentum_floor(facing * advance, delta)
+
+
+func _apply_forward_momentum_floor(target_x: float, delta: float, drift_rate: float = 2.5) -> void:
+	if target_x == 0.0:
+		return
+	var forward := signi(signf(target_x))
+	if signi(signf(velocity.x)) == forward:
+		if absf(velocity.x) < absf(target_x):
+			velocity.x = target_x
+		return
+	if absf(velocity.x) < 20.0:
+		velocity.x = move_toward(velocity.x, target_x, stats.air_move_speed * drift_rate * delta)
+		return
+	velocity.x = move_toward(velocity.x, target_x, stats.air_move_speed * 1.5 * delta)
+
+
 func _get_stage_walk_min_x() -> float:
 	if fight_manager == null:
 		return -1.0e6
@@ -770,7 +806,13 @@ func _handle_actions() -> void:
 
 	_try_buffer_combo_input()
 
+	if not is_player_controlled:
+		_poll_ai_combo_break_input()
+
 	if not state_machine.can_accept_input():
+		return
+
+	if not is_player_controlled and _try_ai_actions():
 		return
 
 	if _try_execute_action_queue():
@@ -778,6 +820,10 @@ func _handle_actions() -> void:
 
 	if _consume_virtual_projectile_fire():
 		return
+
+
+func can_spend_mana(amount: int) -> bool:
+	return _can_spend_mana(amount)
 
 
 func build_input_snapshot() -> Dictionary:
@@ -802,7 +848,7 @@ func resolve_buffered_attack_name(snap: Dictionary) -> String:
 		if move_dir != 0 and move_dir == -snap_facing:
 			return "back_retreat"
 		if move_dir == snap_facing:
-			return _get_air_forward_chain_attack()
+			return "air_forward"
 		return "air_neutral"
 	if not is_on_floor():
 		return ""
@@ -863,6 +909,11 @@ func _should_retry_buffered_intent(intent: FightInputBuffer.Intent) -> bool:
 			if _input_buffer.is_guard_held() and _input_buffer.is_attack_held():
 				return true
 			return false
+		FightInputBuffer.Intent.DASH:
+			var dash_dir := int(_input_buffer.peek_entry().get("data", {}).get("dash_direction", 0))
+			if _is_back_dash(dash_dir) and not _can_spend_mana(stats.back_dash_mana_cost):
+				return false
+			return false
 	return false
 
 
@@ -883,8 +934,8 @@ func _execute_buffered_intent(intent: FightInputBuffer.Intent) -> bool:
 			_try_attack(attack_name)
 			return true
 		FightInputBuffer.Intent.THROW:
-			if not is_on_floor():
-				return false
+			if not can_attempt_throw():
+				return true
 			_try_throw()
 			return true
 		FightInputBuffer.Intent.JUMP:
@@ -905,7 +956,6 @@ func _execute_buffered_intent(intent: FightInputBuffer.Intent) -> bool:
 				return false
 			var low_angle := bool(data.get("down", _is_down_pressed()))
 			_projectile_auto_release = not Input.is_action_pressed("projectile")
-			_clear_air_forward_combo()
 			state_machine.begin_projectile_charge(low_angle)
 			_projectile_charging = true
 			return true
@@ -1009,12 +1059,157 @@ func _register_move_tap(direction: int) -> void:
 func _try_dash(direction: int) -> void:
 	if state_machine.current_state == FighterStateMachine.State.DASH:
 		return
-	_clear_air_forward_combo()
 	if not is_on_floor() and air_dash_used:
+		return
+	if _is_back_dash(direction) and not _can_spend_mana(stats.back_dash_mana_cost):
 		return
 	if not is_on_floor():
 		air_dash_used = true
+	if _is_back_dash(direction):
+		_spend_mana(stats.back_dash_mana_cost)
 	state_machine.start_dash(direction)
+
+
+func _is_back_dash(direction: int) -> bool:
+	return direction != 0 and direction == -facing
+
+
+func _can_spend_mana(amount: int) -> bool:
+	if amount <= 0:
+		return true
+	if fight_manager != null and fight_manager.infinite_mana:
+		return true
+	return mana >= amount
+
+
+func _spend_mana(amount: int) -> bool:
+	if not _can_spend_mana(amount):
+		return false
+	if fight_manager != null and fight_manager.infinite_mana:
+		return true
+	mana = maxi(0, mana - amount)
+	if fight_manager != null:
+		fight_manager.notify_mana_changed(self)
+	return true
+
+
+func pulse_virtual_combo_break() -> void:
+	_virtual_down_pulse = true
+
+
+func _poll_ai_combo_break_input() -> void:
+	if not _is_in_combo_break_state():
+		return
+	if not _virtual_down_pulse:
+		return
+	_virtual_down_pulse = false
+	_try_combo_break()
+
+
+func _poll_combo_break_input() -> void:
+	if not _is_in_combo_break_state():
+		return
+	if not _just_pressed_combo_break():
+		return
+	_try_combo_break()
+
+
+func _is_in_combo_break_state() -> bool:
+	return (
+		state_machine.current_state == FighterStateMachine.State.STAGGER
+		or state_machine.is_grabbed()
+	)
+
+
+func _can_perform_combo_break() -> bool:
+	if state_machine.current_state == FighterStateMachine.State.STAGGER:
+		return true
+	if not state_machine.is_grabbed():
+		return false
+	var thrower := state_machine.grabbed_by
+	return thrower != null and thrower.state_machine.is_holding_grab()
+
+
+func _just_pressed_combo_break() -> bool:
+	if is_player_controlled:
+		return Input.is_action_just_pressed("move_down")
+	return false
+
+
+func _try_ai_actions() -> bool:
+	if _just_pressed_jump() and is_on_floor():
+		velocity.y = _get_jump_velocity()
+		_jump_hold_frames = 0
+		state_machine.change_state(FighterStateMachine.State.IDLE)
+		return true
+	if _just_pressed_throw():
+		_try_throw()
+		return true
+	var attack_name := _consume_attack_input()
+	if attack_name != "":
+		_try_attack(_resolve_virtual_attack_name(attack_name))
+		return true
+	return false
+
+
+func _resolve_virtual_attack_name(attack_name: String) -> String:
+	if _attacks.has(attack_name):
+		return attack_name
+	var snap := build_input_snapshot()
+	snap["attack_name"] = attack_name
+	return resolve_buffered_attack_name(snap)
+
+
+func _try_combo_break() -> void:
+	if not _can_perform_combo_break():
+		return
+	if not _spend_mana(stats.combo_break_mana_cost):
+		return
+	_input_buffer.reset()
+
+	var breaking_grab := state_machine.is_grabbed()
+	var push_target: Fighter = state_machine.grabbed_by if breaking_grab else opponent
+	if breaking_grab:
+		state_machine.exit_grab_from_combo_break()
+	else:
+		state_machine.exit_stagger_from_combo_break()
+
+	if push_target == null:
+		return
+
+	var apart_dir := signi(global_position.x - push_target.global_position.x)
+	if apart_dir == 0:
+		apart_dir = facing
+	var close := absf(push_target.global_position.x - global_position.x) <= stats.combo_break_close_range
+
+	push_target.receive_combo_break_push(self, apart_dir)
+	if close:
+		_apply_combo_break_self_push(-apart_dir)
+
+
+func _apply_combo_break_self_push(push_dir: int) -> void:
+	if push_dir == 0:
+		return
+	var push_speed := push_dir * stats.combo_break_push_knockback
+	state_machine.enter_combo_break_push(push_speed)
+	mark_external_displacement(COMBO_BREAK_DISPLACEMENT_FRAMES)
+
+
+func receive_combo_break_push(breaker: Fighter, apart_dir: int = 0) -> void:
+	if breaker == null:
+		return
+	var push_dir := apart_dir
+	if push_dir == 0:
+		push_dir = signi(global_position.x - breaker.global_position.x)
+	if push_dir == 0:
+		push_dir = breaker.facing
+	var push_speed := push_dir * stats.combo_break_push_knockback
+	state_machine.interrupt_attack_from_combo_break()
+	state_machine.interrupt_grab_from_combo_break()
+	state_machine.enter_combo_break_push(push_speed)
+	mark_external_displacement(COMBO_BREAK_DISPLACEMENT_FRAMES)
+	if not is_player_controlled and ai_controller.enabled:
+		ai_controller.notify_took_damage()
 
 
 func finish_dash() -> void:
@@ -1032,10 +1227,19 @@ func request_throw() -> void:
 func _try_throw() -> void:
 	if state_machine.current_state == FighterStateMachine.State.GRAB:
 		return
-	if not is_on_floor():
+	if not can_attempt_throw():
 		return
-	_clear_air_forward_combo()
 	state_machine.start_grab(_grab)
+
+
+func can_attempt_throw() -> bool:
+	if not is_on_floor():
+		return false
+	if state_machine.is_crouching():
+		return false
+	if is_crouch_held():
+		return false
+	return true
 
 
 func _try_buffer_combo_input() -> void:
@@ -1065,16 +1269,11 @@ func _try_attack(attack_name: String) -> void:
 		if is_on_floor():
 			_begin_retreat_jump_attack(attack)
 			return
-		_clear_air_forward_combo()
 		state_machine.start_attack(attack)
 		return
 	if attack_name.begins_with("air_"):
 		if is_on_floor():
 			return
-		if attack_name == "air_forward":
-			attack_name = _get_air_forward_chain_attack()
-		elif _air_forward_combo_step > 0 and attack_name != _get_air_forward_chain_attack():
-			_clear_air_forward_combo()
 	elif not is_on_floor():
 		return
 	state_machine.start_attack(_attacks[attack_name])
@@ -1083,7 +1282,6 @@ func _try_attack(attack_name: String) -> void:
 func _begin_retreat_jump_attack(attack: AttackData) -> void:
 	velocity.x = -facing * attack.retreat_hop_velocity.x
 	velocity.y = attack.retreat_hop_velocity.y
-	_clear_air_forward_combo()
 	state_machine.start_attack(attack)
 
 
@@ -1116,7 +1314,6 @@ func _handle_projectile_input(delta: float) -> void:
 
 	if _is_projectile_pressed():
 		_projectile_auto_release = Input.is_action_just_pressed("projectile")
-		_clear_air_forward_combo()
 		state_machine.begin_projectile_charge(_is_down_pressed())
 		_projectile_charging = true
 
@@ -1414,13 +1611,13 @@ func _break_juggle_with(attacker: Fighter) -> void:
 		attacker.state_machine.clear_combo_buffer()
 
 
-func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
+func receive_hit(attacker: Fighter, attack_data: AttackData) -> bool:
 	if not state_machine.is_active_in_match():
-		return
+		return false
 	if state_machine.is_invincible():
-		return
+		return false
 	if state_machine.is_knockdown_falling():
-		return
+		return false
 
 	if state_machine.is_holding_grab():
 		state_machine.release_held_grab()
@@ -1433,7 +1630,7 @@ func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
 		direction = attacker.facing
 
 	if _try_resolve_guard_hit(attacker, attack_data, direction):
-		return
+		return true
 
 	if state_machine.is_dash_vulnerable():
 		state_machine.reset_stagger_meter()
@@ -1442,19 +1639,19 @@ func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
 		)
 		if not is_player_controlled and ai_controller.enabled:
 			ai_controller.notify_took_damage()
-		return
+		return true
 
 	if state_machine.is_vulnerable():
 		_kill()
-		return
+		return true
 
 	if not is_on_floor():
 		_apply_airborne_hit(attacker, attack_data, direction)
-		return
+		return true
 
 	if attack_data.launch_velocity < 0.0:
 		_apply_launcher_hit(attacker, attack_data, direction)
-		return
+		return true
 
 	var horizontal_kb := direction * attack_data.knockback * _get_knockback_taken_multiplier()
 	match attack_data.hit_type:
@@ -1499,6 +1696,7 @@ func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
 
 	if not is_player_controlled and ai_controller.enabled:
 		ai_controller.notify_took_damage()
+	return true
 
 
 func _try_resolve_guard_hit(attacker: Fighter, attack_data: AttackData, direction: int) -> bool:
@@ -1559,7 +1757,6 @@ func _begin_knockdown_from_impulse(
 		_input_buffer.reset()
 		set_hitbox_active(false)
 		set_grabbox_active(false)
-		_clear_air_forward_combo()
 	elif is_on_floor():
 		global_position.y -= 8.0
 		velocity = impulse
@@ -1793,6 +1990,8 @@ func _update_ledge_crouch_tracking() -> void:
 			_airborne_crouch_frames = 1
 		else:
 			_airborne_crouch_frames += 1
+	if is_on_floor() and not _was_on_floor_last_frame:
+		_juggle_hit_lockout = 0.0
 	_was_on_floor_last_frame = is_on_floor()
 
 
@@ -2049,14 +2248,14 @@ func _apply_getup_pose() -> void:
 
 
 func _on_hit_landed(victim: Fighter, attack_data: AttackData) -> void:
-	victim.receive_hit(self, attack_data)
+	if not victim.receive_hit(self, attack_data):
+		return
 	if state_machine.attack_contact == FighterStateMachine.ATTACK_CONTACT_BLOCK:
 		_apply_hit_feedback(attack_data, victim, true)
 		return
 	state_machine.register_attack_hit(victim)
 	_apply_hit_feedback(attack_data, victim, false)
 	_apply_attacker_juggle_pop(attack_data)
-	_register_air_forward_combo_hit(attack_data, victim)
 	_refresh_juggle_mobility(victim)
 
 
@@ -2145,6 +2344,9 @@ func _build_air_juggle_knockdown_impulse(direction: int, knockback: float) -> Ve
 
 
 func _apply_juggle_hit(attacker: Fighter, attack_data: AttackData, direction: int) -> void:
+	if not is_on_floor() and is_juggle_hit_locked():
+		return
+	var already_hit := state_machine.was_hit_by_attack_serial(attacker)
 	var kb_scale := attack_data.juggle_knockback_scale
 	if kb_scale <= 0.0:
 		kb_scale = DEFAULT_JUGGLE_KNOCKBACK_SCALE
@@ -2167,8 +2369,9 @@ func _apply_juggle_hit(attacker: Fighter, attack_data: AttackData, direction: in
 			false,
 			attacker
 		)
-	else:
+	elif not already_hit:
 		_apply_juggle_pop(attack_data)
+		apply_juggle_hit_lockout()
 		mark_external_displacement()
 	if not is_player_controlled and ai_controller.enabled:
 		ai_controller.notify_took_damage()
@@ -2188,7 +2391,7 @@ func _apply_attacker_juggle_pop(attack_data: AttackData) -> void:
 			velocity.y = maxf(velocity.y, pop_y)
 	var pop_forward := attack_data.attacker_juggle_pop_forward
 	if pop_forward != 0.0:
-		velocity.x = facing * pop_forward
+		_apply_forward_momentum_floor(facing * pop_forward, get_physics_process_delta_time(), 4.0)
 
 
 func _apply_juggle_pop(attack_data: AttackData) -> void:
@@ -2436,7 +2639,9 @@ func _just_pressed_jump() -> bool:
 	if _virtual_jump_pulse:
 		_virtual_jump_pulse = false
 		return true
-	return false
+	if not is_player_controlled:
+		return false
+	return Input.is_action_just_pressed("jump") or Input.is_action_just_pressed("move_up")
 
 
 func _consume_throw_input() -> bool:
@@ -2583,7 +2788,7 @@ func _is_up_pressed() -> bool:
 
 
 func _is_neutral_attack_intent() -> bool:
-	if _is_up_pressed():
+	if not is_on_floor() and _is_up_pressed():
 		return false
 	if is_on_floor() and _is_down_pressed():
 		return false
@@ -2607,7 +2812,7 @@ func _resolve_attack_from_direction() -> String:
 		if air_move_dir != 0 and air_move_dir == -facing:
 			return "back_retreat"
 		if air_move_dir == facing:
-			return _get_air_forward_chain_attack()
+			return "air_forward"
 		return "air_neutral"
 	if _is_down_pressed():
 		return "down"

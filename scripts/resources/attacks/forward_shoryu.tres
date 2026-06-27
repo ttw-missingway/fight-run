@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="AttackData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/attack_data.gd" id="1"]
+[ext_resource type="Resource" path="res://scripts/resources/attacks/forward_shoryu_upper.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "forward_shoryu"
+knockback = 220.0
+hit_type = 0
+stagger_value = 8
+startup_frames = 3
+active_frames = 4
+recovery_frames_whiff = 16
+recovery_frames_hit = 8
+recovery_frames_block = 14
+hitstun_seconds = 0.46
+hitbox_offset = Vector2(40, -24)
+hitbox_size = Vector2(34, 32)
+ground_advance_speed = 140.0
+combo_follow_up = ExtResource("2")
+combo_link_frame = 6
+auto_chain_follow_up = true

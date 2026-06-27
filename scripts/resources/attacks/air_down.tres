@@ -7,6 +7,7 @@ script = ExtResource("1")
 id = "air_down"
 knockback = 310.0
 hit_type = 1
+stagger_value = 14
 startup_frames = 24
 active_frames = 6
 recovery_frames_whiff = 18

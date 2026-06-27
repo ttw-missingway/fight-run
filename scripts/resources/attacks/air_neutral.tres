@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "air_neutral"
 knockback = 120.0
-stagger_value = 4
+stagger_value = 7
 is_juggle_attack = true
 startup_frames = 4
 active_frames = 14

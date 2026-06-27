@@ -2,11 +2,14 @@ extends CanvasLayer
 
 signal ai_mode_selected(mode: int)
 signal infinite_mode_toggled(enabled: bool)
+signal infinite_mana_toggled(enabled: bool)
 signal restart_requested
 signal debug_knockdown_requested
 
 @onready var player_lives_label: Label = $Control/PlayerLivesLabel
+@onready var player_mana_label: Label = $Control/PlayerManaLabel
 @onready var opponent_lives_label: Label = $Control/OpponentLivesLabel
+@onready var opponent_mana_label: Label = $Control/OpponentManaLabel
 @onready var state_label: Label = $Control/StateLabel
 @onready var ai_mode_button: Button = $Control/AiModeButton
 @onready var debug_knockdown_button: Button = $Control/DebugKnockdownButton
@@ -19,6 +22,7 @@ signal debug_knockdown_requested
 var _player: Fighter
 var _opponent: Fighter
 var _infinite_lives: bool = false
+var _infinite_mana: bool = false
 var _show_input_buffer: bool = false
 var _ai_buttons: Dictionary = {}
 var _mode_button_group := ButtonGroup.new()
@@ -241,7 +245,7 @@ func _refresh_controls_summary() -> void:
 	if GamepadInput.get_primary_device() >= 0 and not GamepadInput.is_retrobit_n64_device():
 		pad_hint = "Gamepad: stick/D-pad move, A jump, X attack, B guard, Y grab, RB projectile"
 	controls_label.text = (
-		"%s  ·  %s  ·  F1 hitboxes  ·  K test KD"
+		"%s  ·  %s  ·  Down+stagger combo break (1 mana)  ·  F1 hitboxes  ·  K test KD"
 		% [ControlSettings.get_controls_summary(), pad_hint]
 	)
 
@@ -316,7 +320,7 @@ func _build_ai_selector() -> void:
 	panel.offset_left = -184.0
 	panel.offset_top = 88.0
 	panel.offset_right = -8.0
-	panel.offset_bottom = 468.0
+	panel.offset_bottom = 492.0
 	hud_control.add_child(panel)
 
 	var outer := VBoxContainer.new()
@@ -331,6 +335,15 @@ func _build_ai_selector() -> void:
 		_refresh_life_labels()
 	)
 	outer.add_child(infinite_toggle)
+
+	var infinite_mana_toggle := CheckButton.new()
+	infinite_mana_toggle.text = "Infinite Mana"
+	infinite_mana_toggle.toggled.connect(func(enabled: bool) -> void:
+		_infinite_mana = enabled
+		infinite_mana_toggled.emit(enabled)
+		_refresh_mana_labels()
+	)
+	outer.add_child(infinite_mana_toggle)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -383,6 +396,26 @@ func update_lives(fighter: Fighter, lives: int) -> void:
 		player_lives_label.text = _life_text("Player Lives", lives)
 	elif fighter == _opponent:
 		opponent_lives_label.text = _life_text("AI Lives", lives)
+
+
+func update_mana(fighter: Fighter, mana: int) -> void:
+	if fighter == _player:
+		player_mana_label.text = _mana_text("Player Mana", mana)
+	elif fighter == _opponent:
+		opponent_mana_label.text = _mana_text("AI Mana", mana)
+
+
+func _mana_text(prefix: String, mana: int) -> String:
+	if _infinite_mana:
+		return "%s: ∞" % prefix
+	return "%s: %d" % [prefix, mana]
+
+
+func _refresh_mana_labels() -> void:
+	if _player != null:
+		update_mana(_player, _player.mana)
+	if _opponent != null:
+		update_mana(_opponent, _opponent.mana)
 
 
 func _life_text(prefix: String, lives: int) -> String:

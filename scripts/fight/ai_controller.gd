@@ -2,6 +2,7 @@ extends Node
 class_name AiController
 
 enum BehaviorMode {
+	IDLE,
 	BLOCK,
 	DASH,
 	JUMP,
@@ -18,6 +19,7 @@ enum BehaviorMode {
 }
 
 const SIMPLE_MODES: Array[BehaviorMode] = [
+	BehaviorMode.IDLE,
 	BehaviorMode.BLOCK,
 	BehaviorMode.DASH,
 	BehaviorMode.JUMP,
@@ -37,6 +39,7 @@ const COMPLEX_MODES: Array[BehaviorMode] = [
 ]
 
 const MODE_LABELS := {
+	BehaviorMode.IDLE: "Idle",
 	BehaviorMode.BLOCK: "Block",
 	BehaviorMode.DASH: "Dash",
 	BehaviorMode.JUMP: "Jump",
@@ -53,6 +56,7 @@ const MODE_LABELS := {
 }
 
 const MODE_CATEGORY := {
+	BehaviorMode.IDLE: "Simple",
 	BehaviorMode.BLOCK: "Simple",
 	BehaviorMode.DASH: "Simple",
 	BehaviorMode.JUMP: "Simple",
@@ -123,19 +127,7 @@ func _reset_mode_state() -> void:
 	_wakeup_triggered = false
 	_hold_guard = false
 	_hold_crouch = false
-	_engaged = _is_complex_mode()
-
-
-func _is_simple_mode() -> bool:
-	return behavior_mode in SIMPLE_MODES
-
-
-func _is_complex_mode() -> bool:
-	return behavior_mode in COMPLEX_MODES
-
-
-func _survival_active() -> bool:
-	return _is_complex_mode() or _engaged
+	_engaged = behavior_mode != BehaviorMode.IDLE
 
 
 func notify_took_damage() -> void:
@@ -160,10 +152,12 @@ func update_input(delta: float) -> void:
 	if _handle_recovery_input():
 		return
 
-	if not _survival_active():
-		_hold_guard = false
-		_hold_crouch = false
-		_fighter.set_virtual_input(false, false, false, false, false, "", false, 0, -1.0, false)
+	if behavior_mode == BehaviorMode.IDLE:
+		_fighter.clear_virtual_input()
+		return
+
+	if _handle_combo_break_reaction():
+		_emit_virtual_input()
 		return
 
 	_apply_stance_holds()
@@ -176,6 +170,34 @@ func update_input(delta: float) -> void:
 		_decide_action()
 
 	_emit_virtual_input()
+
+
+func _handle_combo_break_reaction() -> bool:
+	if not _fighter.state_machine.current_state in [
+		FighterStateMachine.State.STAGGER,
+		FighterStateMachine.State.GRABBED,
+	]:
+		return false
+	if _fighter.state_machine.current_state == FighterStateMachine.State.GRABBED:
+		var thrower := _fighter.state_machine.grabbed_by
+		if thrower == null or not thrower.state_machine.is_holding_grab():
+			return false
+	if not _has_mana(_fighter.stats.combo_break_mana_cost):
+		return false
+	var should_break := false
+	match behavior_mode:
+		BehaviorMode.IDLE, BehaviorMode.BLOCK, BehaviorMode.DUCK_BLOCK:
+			should_break = false
+		BehaviorMode.COUNTER, BehaviorMode.RUSHDOWN, BehaviorMode.GRAPPLER:
+			should_break = true
+		BehaviorMode.ZONER, BehaviorMode.SHOTO:
+			should_break = _engaged and randf() < 0.7
+		_:
+			should_break = randf() < 0.45
+	if not should_break:
+		return false
+	_fighter.pulse_virtual_combo_break()
+	return true
 
 
 func _emit_virtual_input() -> void:
@@ -258,24 +280,21 @@ func _update_ledge_hang_wait() -> void:
 
 
 func _trigger_mode_wakeup(from_ledge: bool) -> void:
-	if _is_simple_mode() and not _engaged:
-		_start_wakeup(from_ledge, FighterStateMachine.WakeupOption.NEUTRAL)
-		return
 	match behavior_mode:
+		BehaviorMode.IDLE:
+			_start_wakeup(from_ledge, FighterStateMachine.WakeupOption.NEUTRAL)
 		BehaviorMode.BLOCK, BehaviorMode.DUCK_BLOCK:
 			_start_wakeup(from_ledge, FighterStateMachine.WakeupOption.BLOCK)
 		BehaviorMode.DUCK:
 			_start_wakeup(from_ledge, FighterStateMachine.WakeupOption.CROUCH)
 		BehaviorMode.DASH, BehaviorMode.COUNTER, BehaviorMode.SHOTO:
 			_start_center_roll_wakeup(from_ledge)
-		BehaviorMode.JUMP, BehaviorMode.PROJECTILE:
+		BehaviorMode.JUMP, BehaviorMode.PROJECTILE, BehaviorMode.ZONER:
 			_start_wakeup(from_ledge, FighterStateMachine.WakeupOption.JUMP)
 		BehaviorMode.ATTACK, BehaviorMode.RUSHDOWN:
 			_start_wakeup(from_ledge, FighterStateMachine.WakeupOption.ATTACK)
 		BehaviorMode.GRAB, BehaviorMode.GRAPPLER:
 			_start_wakeup(from_ledge, FighterStateMachine.WakeupOption.GRAB)
-		BehaviorMode.ZONER:
-			_start_wakeup(from_ledge, FighterStateMachine.WakeupOption.JUMP)
 
 
 func _start_wakeup(from_ledge: bool, option: FighterStateMachine.WakeupOption) -> void:
@@ -286,8 +305,7 @@ func _start_wakeup(from_ledge: bool, option: FighterStateMachine.WakeupOption) -
 
 
 func _start_center_roll_wakeup(from_ledge: bool) -> void:
-	var roll := _center_roll_option(from_ledge)
-	_start_wakeup(from_ledge, roll)
+	_start_wakeup(from_ledge, _center_roll_option(from_ledge))
 
 
 func _center_roll_option(from_ledge: bool) -> FighterStateMachine.WakeupOption:
@@ -305,30 +323,6 @@ func _center_roll_option(from_ledge: bool) -> FighterStateMachine.WakeupOption:
 	return FighterStateMachine.WakeupOption.ROLL_LEFT if x > 0.0 else FighterStateMachine.WakeupOption.ROLL_RIGHT
 
 
-func _apply_getup_followup_input() -> void:
-	if _is_simple_mode() and not _engaged:
-		return
-	match behavior_mode:
-		BehaviorMode.BLOCK:
-			_hold_guard = true
-			_hold_crouch = false
-		BehaviorMode.DUCK_BLOCK:
-			_hold_guard = true
-			_hold_crouch = true
-		BehaviorMode.DUCK:
-			_hold_crouch = true
-			_hold_guard = false
-		BehaviorMode.GRAB, BehaviorMode.GRAPPLER:
-			if _fighter.state_machine.can_buffer_wakeup_followup():
-				_fighter.state_machine.set_wakeup_followup(FighterStateMachine.WakeupOption.GRAB)
-		BehaviorMode.ATTACK, BehaviorMode.RUSHDOWN:
-			if _fighter.state_machine.can_buffer_wakeup_followup():
-				_fighter.state_machine.set_wakeup_followup(FighterStateMachine.WakeupOption.ATTACK)
-		BehaviorMode.PROJECTILE, BehaviorMode.JUMP, BehaviorMode.ZONER:
-			if _fighter.state_machine.can_buffer_wakeup_followup():
-				_fighter.state_machine.set_wakeup_followup(FighterStateMachine.WakeupOption.JUMP)
-
-
 func _throw_direction_for_hold() -> int:
 	if _fighter.state_machine.is_holding_grab():
 		if behavior_mode == BehaviorMode.COUNTER:
@@ -344,22 +338,24 @@ func _decide_action() -> void:
 	var target_left := target.global_position.x < _fighter.global_position.x
 
 	match behavior_mode:
+		BehaviorMode.IDLE:
+			pass
 		BehaviorMode.BLOCK:
-			_decide_simple_block()
+			_decide_simple_block(distance, target_left)
 		BehaviorMode.DASH:
 			_decide_simple_dash(distance, target_left)
 		BehaviorMode.JUMP:
-			_decide_simple_jump()
+			_decide_simple_jump(distance, target_left)
 		BehaviorMode.DUCK_BLOCK:
-			_decide_simple_duck_block()
+			_decide_simple_duck_block(distance)
 		BehaviorMode.DUCK:
 			_decide_simple_duck()
 		BehaviorMode.ATTACK:
-			_decide_simple_attack(distance)
+			_decide_simple_attack(distance, target_left)
 		BehaviorMode.GRAB:
-			_decide_simple_grab(distance)
+			_decide_simple_grab(distance, target_left)
 		BehaviorMode.PROJECTILE:
-			_decide_simple_projectile(distance)
+			_decide_simple_projectile(distance, target_left)
 		BehaviorMode.ZONER:
 			_decide_zoner_behavior(distance, target_left)
 		BehaviorMode.RUSHDOWN:
@@ -372,111 +368,157 @@ func _decide_action() -> void:
 			_decide_grappler_behavior(distance, target_left)
 
 
-func _decide_simple_block() -> void:
-	pass
+func _decide_simple_block(_distance: float, target_left: bool) -> void:
+	if _fighter.is_on_floor() and randf() < 0.12:
+		_set_move_toward_target(target_left)
 
 
-func _decide_simple_duck_block() -> void:
-	pass
+func _decide_simple_duck_block(distance: float) -> void:
+	if distance < close_range and _attack_cooldown <= 0.0 and randf() < 0.2:
+		_queue_attack("down")
 
 
 func _decide_simple_duck() -> void:
-	pass
+	if _attack_cooldown > 0.0 or not _fighter.is_on_floor():
+		return
+	if randf() < 0.18:
+		_queue_attack("down")
+		_attack_cooldown = CombatTiming.scale_time(randf_range(0.5, 0.85))
 
 
-func _decide_simple_jump() -> void:
-	if _fighter.is_on_floor() and randf() < 0.45:
+func _decide_simple_jump(distance: float, target_left: bool) -> void:
+	if not _fighter.is_on_floor():
+		return
+	if distance < attack_range and _attack_cooldown <= 0.0 and randf() < 0.35:
+		_queue_attack("neutral")
+		_attack_cooldown = CombatTiming.scale_time(randf_range(0.45, 0.75))
+		return
+	if randf() < 0.4:
 		_virtual_jump = true
+	if distance > attack_range * 0.8:
+		_set_move_toward_target(target_left)
 
 
 func _decide_simple_dash(distance: float, target_left: bool) -> void:
 	if not _fighter.is_on_floor() or _attack_cooldown > 0.0:
 		return
-	if distance < attack_range * 1.2:
-		if randf() < 0.55:
-			var orbit := -1 if not target_left else 1
-			if randf() < 0.5:
-				orbit *= -1
-			_fighter.request_dash(orbit)
-			_attack_cooldown = CombatTiming.scale_time(0.45)
-	elif randf() < 0.25:
-		_fighter.request_dash(-1 if target_left else 1)
+	if distance < attack_range and randf() < 0.45:
+		_request_forward_dash(target_left)
+		_attack_cooldown = CombatTiming.scale_time(0.4)
+	elif distance > attack_range * 1.35 and randf() < 0.35:
+		_request_forward_dash(target_left)
+		_attack_cooldown = CombatTiming.scale_time(0.45)
+	elif distance < attack_range * 0.8 and randf() < 0.3:
+		_request_back_dash(target_left)
 		_attack_cooldown = CombatTiming.scale_time(0.55)
 
 
-func _decide_simple_attack(distance: float) -> void:
-	if distance < attack_range and _attack_cooldown <= 0.0 and _fighter.is_on_floor():
-		_pick_random_attack()
-		_attack_cooldown = CombatTiming.scale_time(randf_range(0.45, 0.75))
-
-
-func _decide_simple_grab(distance: float) -> void:
-	if distance < close_range + 20.0 and _attack_cooldown <= 0.0 and _fighter.is_on_floor():
-		_virtual_throw = true
-		_attack_cooldown = CombatTiming.scale_time(randf_range(0.55, 0.9))
-
-
-func _decide_simple_projectile(distance: float) -> void:
+func _decide_simple_attack(distance: float, target_left: bool) -> void:
+	var target := _fighter.opponent
+	if not _fighter.is_on_floor():
+		if distance < attack_range and _attack_cooldown <= 0.0 and randf() < 0.35:
+			_queue_attack("air_neutral")
+			_attack_cooldown = CombatTiming.scale_time(0.55)
+		return
+	if distance > attack_range * 0.95:
+		_set_move_toward_target(target_left)
+		if distance > attack_range * 1.25 and randf() < 0.25:
+			_request_forward_dash(target_left)
+		return
 	if _attack_cooldown > 0.0:
 		return
-	if randf() < 0.2 and _fighter.is_on_floor():
+	_pick_offensive_attack(distance, target)
+	_attack_cooldown = CombatTiming.scale_time(randf_range(0.38, 0.72))
+
+
+func _decide_simple_grab(distance: float, target_left: bool) -> void:
+	if not _fighter.is_on_floor():
+		return
+	if distance > close_range + 16.0:
+		_set_move_toward_target(target_left)
+		if distance > attack_range and randf() < 0.3:
+			_request_forward_dash(target_left)
+		return
+	if _attack_cooldown > 0.0:
+		return
+	_virtual_throw = true
+	_attack_cooldown = CombatTiming.scale_time(randf_range(0.55, 0.9))
+
+
+func _decide_simple_projectile(distance: float, target_left: bool) -> void:
+	if _attack_cooldown > 0.0:
+		return
+	if _try_answer_crouch_block(distance):
+		return
+	if distance < zoner_panic_range and randf() < 0.35:
+		_request_back_dash(target_left)
+		_attack_cooldown = CombatTiming.scale_time(0.55)
+		return
+	if distance > attack_range:
+		_set_move_away_from_target(target_left)
+	if randf() < 0.18 and _fighter.is_on_floor():
 		_virtual_jump = true
-	_attack_cooldown = CombatTiming.scale_time(randf_range(0.35, 0.65))
-	_virtual_projectile_charge = randf_range(0.0, 0.55)
-	_virtual_projectile_low = randf() < 0.4
+	_queue_projectile(randf_range(0.3, 0.75), randf() < 0.35)
+	_attack_cooldown = CombatTiming.scale_time(randf_range(0.65, 1.05))
 
 
 func _decide_zoner_behavior(distance: float, target_left: bool) -> void:
 	_apply_zoner_movement(distance, target_left)
 	if _attack_cooldown > 0.0:
 		return
+	if _try_answer_crouch_block(distance):
+		return
 	if distance < zoner_panic_range:
-		if _fighter.is_on_floor() and randf() < 0.35:
-			_fighter.request_dash(-1 if not target_left else 1)
+		if _fighter.is_on_floor() and randf() < 0.5:
+			_request_back_dash(target_left)
 			_attack_cooldown = CombatTiming.scale_time(0.45)
-		elif randf() < 0.4:
+		elif randf() < 0.35:
 			_virtual_guard = true
 		return
-	if distance >= zoner_ideal_min_range * 0.75:
+	if distance >= zoner_ideal_min_range * 0.7:
 		_queue_zoner_shot()
-	elif distance > close_range and randf() < 0.6:
+	elif distance > close_range and randf() < 0.65:
 		_queue_zoner_shot()
 
 
 func _queue_zoner_shot() -> void:
-	_virtual_projectile_charge = _random_zoner_charge()
-	_virtual_projectile_low = randf() < 0.35
-	_attack_cooldown = CombatTiming.scale_time(randf_range(0.55, 1.1))
+	_queue_projectile(_random_zoner_charge(), randf() < 0.35)
+	_attack_cooldown = CombatTiming.scale_time(randf_range(0.7, 1.2))
 
 
 func _decide_rushdown_behavior(distance: float, target_left: bool) -> void:
+	var target := _fighter.opponent
 	_move_toward_target(distance, target_left)
-	if _attack_cooldown > 0.0:
+	if _attack_cooldown > 0.0 or not _fighter.is_on_floor():
 		return
-	if distance <= close_range + 8.0 and _fighter.is_on_floor() and randf() < 0.35:
+	if _try_answer_crouch_block(distance):
+		return
+	if distance <= close_range + 8.0 and randf() < 0.45:
 		_virtual_throw = true
 		_attack_cooldown = CombatTiming.scale_time(0.65)
-	elif distance < attack_range and _fighter.is_on_floor():
-		if randf() < 0.55:
-			_pending_attack_name = "forward"
+	elif distance < attack_range:
+		if randf() < 0.45:
+			_queue_attack("forward")
 		else:
-			_pick_random_attack()
+			_pick_offensive_attack(distance, target)
 		_attack_cooldown = CombatTiming.scale_time(0.42)
-	elif distance < attack_range * 1.4 and _fighter.is_on_floor() and randf() < 0.35:
-		_fighter.request_dash(1 if not target_left else -1)
+	elif distance < attack_range * 1.5 and randf() < 0.45:
+		_request_forward_dash(target_left)
 		_attack_cooldown = CombatTiming.scale_time(0.35)
 
 
 func _decide_counter_behavior(distance: float, target_left: bool, target: Fighter) -> void:
-	if distance < close_range + 10.0:
+	if distance < close_range + 12.0:
 		if target.state_machine.is_attack_in_landing_lag() or target.state_machine.is_attack_active():
 			if _attack_cooldown <= 0.0 and _fighter.is_on_floor():
-				_virtual_throw = true
+				if randf() < 0.55:
+					_virtual_throw = true
+				else:
+					_queue_attack("forward")
 				_attack_cooldown = CombatTiming.scale_time(0.75)
-				return
 		return
-	if distance < attack_range and randf() < 0.2 and _fighter.is_on_floor():
-		_fighter.request_dash(-1 if target_left else 1)
+	if distance < attack_range and randf() < 0.25 and _fighter.is_on_floor():
+		_request_back_dash(target_left)
 		_attack_cooldown = CombatTiming.scale_time(0.5)
 
 
@@ -484,29 +526,42 @@ func _decide_shoto_behavior(distance: float, target_left: bool, target: Fighter)
 	_apply_shoto_spacing(distance, target_left)
 	if _attack_cooldown > 0.0 or not _fighter.is_on_floor():
 		return
-	if distance < close_range and target.state_machine.is_blocking() and randf() < 0.25:
+	if _try_answer_crouch_block(distance):
+		return
+	if distance < close_range and target.state_machine.is_blocking() and randf() < 0.3:
 		_virtual_throw = true
 		_attack_cooldown = CombatTiming.scale_time(0.7)
-	elif distance > zoner_ideal_min_range and randf() < 0.35:
-		_virtual_projectile_charge = randf_range(0.15, 0.65)
-		_attack_cooldown = CombatTiming.scale_time(0.75)
+	elif distance > zoner_ideal_min_range and randf() < 0.4:
+		_queue_projectile(randf_range(0.25, 0.75), randf() < 0.25)
+		_attack_cooldown = CombatTiming.scale_time(0.85)
 	elif distance < attack_range:
-		if randf() < 0.5:
-			_pending_attack_name = "neutral"
+		if not target.is_on_floor() and randf() < 0.4:
+			_queue_attack("anti_air")
+		elif randf() < 0.45:
+			_queue_attack("neutral")
 		else:
-			_pending_attack_name = "forward"
+			_queue_attack("forward")
 		_attack_cooldown = CombatTiming.scale_time(0.5)
+	elif distance < attack_range * 1.35 and randf() < 0.2:
+		_request_forward_dash(target_left)
+		_attack_cooldown = CombatTiming.scale_time(0.45)
 
 
 func _decide_grappler_behavior(distance: float, target_left: bool) -> void:
+	var target := _fighter.opponent
 	_move_toward_target(distance, target_left)
 	if _attack_cooldown > 0.0 or not _fighter.is_on_floor():
 		return
-	if distance < attack_range and distance > close_range and randf() < 0.45:
-		_fighter.request_dash(1 if not target_left else -1)
+	if _try_answer_crouch_block(distance):
+		return
+	if distance < attack_range and distance > close_range and randf() < 0.5:
+		_request_forward_dash(target_left)
 		_attack_cooldown = CombatTiming.scale_time(0.35)
-	elif distance < close_range + 24.0 and randf() < 0.65:
-		_virtual_throw = true
+	elif distance < close_range + 24.0:
+		if randf() < 0.7:
+			_virtual_throw = true
+		else:
+			_queue_attack("forward")
 		_attack_cooldown = CombatTiming.scale_time(0.55)
 
 
@@ -520,14 +575,15 @@ func _apply_shoto_spacing(distance: float, target_left: bool) -> void:
 	elif distance > attack_range + 40.0:
 		_set_move_toward_target(target_left)
 	elif distance < close_range - 8.0:
-		_set_move_away_from_target(target_left)
+		if not _request_back_dash(target_left):
+			_set_move_away_from_target(target_left)
 
 
 func _apply_zoner_movement(distance: float, target_left: bool) -> void:
 	if distance < zoner_ideal_min_range:
 		_set_move_away_from_target(target_left)
 	elif distance > zoner_ideal_max_range:
-		if randf() < 0.4:
+		if randf() < 0.45:
 			_set_move_toward_target(target_left)
 
 
@@ -567,12 +623,85 @@ func _set_move_toward_target(target_left: bool) -> void:
 		_move_direction = 1
 
 
-func _pick_random_attack() -> void:
-	var roll := randi() % 3
+func _dash_toward_dir(target_left: bool) -> int:
+	return -1 if target_left else 1
+
+
+func _dash_away_dir(target_left: bool) -> int:
+	return 1 if target_left else -1
+
+
+func _request_forward_dash(target_left: bool) -> void:
+	_fighter.request_dash(_dash_toward_dir(target_left))
+
+
+func _request_back_dash(target_left: bool) -> bool:
+	if not _has_mana(_fighter.stats.back_dash_mana_cost):
+		return false
+	_fighter.request_dash(_dash_away_dir(target_left))
+	return true
+
+
+func _has_mana(cost: int) -> bool:
+	return _fighter.can_spend_mana(cost)
+
+
+func _queue_attack(attack_name: String) -> void:
+	_pending_attack_name = attack_name
+
+
+func _queue_projectile(charge: float, low_angle: bool) -> void:
+	_virtual_projectile_charge = charge
+	_virtual_projectile_low = low_angle
+
+
+func _try_answer_crouch_block(distance: float) -> bool:
+	if _fighter.opponent == null:
+		return false
+	if (
+		_fighter.opponent.state_machine.current_state
+		!= FighterStateMachine.State.CROUCH_BLOCK
+	):
+		return false
+	if _attack_cooldown > 0.0:
+		return false
+	if distance <= attack_range * 1.2 and _fighter.is_on_floor():
+		if randf() < 0.55:
+			_queue_attack("back_overhead")
+		else:
+			_virtual_jump = true
+			_pending_attack_name = "air_overhead"
+		_attack_cooldown = CombatTiming.scale_time(randf_range(0.5, 0.85))
+		return true
+	if _fighter.is_on_floor() and distance <= attack_range * 1.7 and randf() < 0.5:
+		_virtual_jump = true
+		_pending_attack_name = "air_overhead"
+		_attack_cooldown = CombatTiming.scale_time(randf_range(0.55, 0.95))
+		return true
+	return false
+
+
+func _pick_offensive_attack(distance: float, target: Fighter) -> void:
+	if _try_answer_crouch_block(distance):
+		return
+	if not target.is_on_floor() and distance < attack_range * 1.1 and randf() < 0.5:
+		_queue_attack("anti_air")
+		return
+	_pick_close_range_attack()
+
+
+func _pick_close_range_attack() -> void:
+	var roll := randi() % 5
 	match roll:
-		0:
-			_pending_attack_name = "neutral"
-		1:
-			_pending_attack_name = "forward"
+		0, 1:
+			_queue_attack("neutral")
 		2:
-			_pending_attack_name = "down"
+			_queue_attack("forward")
+		3:
+			_queue_attack("down")
+		_:
+			_queue_attack("forward")
+
+
+func _pick_random_attack() -> void:
+	_pick_close_range_attack()

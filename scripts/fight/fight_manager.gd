@@ -3,6 +3,7 @@ class_name FightManager
 
 signal match_over(winner: Fighter, loser: Fighter)
 signal lives_changed(fighter: Fighter, lives: int)
+signal mana_changed(fighter: Fighter, mana: int)
 
 const RESPAWN_BEAM_SCENE := preload("res://scenes/fight/respawn_beam.tscn")
 const RESPAWN_WINDOW := 5.0 * CombatTiming.FIGHT_TIMING_SCALE
@@ -23,6 +24,7 @@ var player: Fighter
 var opponent: Fighter
 var match_finished: bool = false
 var infinite_lives: bool = false
+var infinite_mana: bool = false
 
 var _arena: Node
 var _active_beam: RespawnBeam
@@ -42,6 +44,8 @@ func setup(arena: Node, player_fighter: Fighter, opponent_fighter: Fighter) -> v
 	opponent.died.connect(_on_fighter_died)
 	_emit_lives(player)
 	_emit_lives(opponent)
+	_emit_mana(player)
+	_emit_mana(opponent)
 
 
 func configure_stage(profile: StageProfile) -> void:
@@ -169,3 +173,11 @@ func _finish_match(loser: Fighter) -> void:
 
 func _emit_lives(fighter: Fighter) -> void:
 	lives_changed.emit(fighter, fighter.lives)
+
+
+func notify_mana_changed(fighter: Fighter) -> void:
+	_emit_mana(fighter)
+
+
+func _emit_mana(fighter: Fighter) -> void:
+	mana_changed.emit(fighter, fighter.mana)

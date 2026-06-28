@@ -573,6 +573,17 @@ func get_projectile_charge_ratio() -> float:
 	return config.get_charge_ratio(projectile_charge_time)
 
 
+## Fraction of max charge TIME held (linear), unlike the logarithmic damage ratio.
+func get_projectile_charge_time_fraction() -> float:
+	var config := (_fighter as Fighter).stats.projectile_config
+	if config == null:
+		return 0.0
+	var scaled_max := CombatTiming.scale_time(config.max_charge_time)
+	if scaled_max <= 0.0:
+		return 0.0
+	return clampf(projectile_charge_time / scaled_max, 0.0, 1.0)
+
+
 func is_projectile_fully_charged() -> bool:
 	var config := (_fighter as Fighter).stats.projectile_config
 	if config == null:

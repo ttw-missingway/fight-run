@@ -1,21 +1,27 @@
 extends CanvasLayer
+class_name TrainingHUD
+
+## Training-mode overlay shown while the pause menu is open. Lets the player pick
+## the AI behavior mode, swap the Player/AI characters, toggle infinite lives and
+## the input-buffer display, and fire debug actions. Emits one signal per choice
+## and owns no game state beyond its own widgets.
 
 
 #region Signals
 
-# Emitted when the player picks an AI behavior mode in the menu.
+## Emitted when the player picks an AI behavior mode in the menu.
 signal ai_mode_selected(mode: int)
 
-# Emitted when the Infinite Lives toggle changes.
+## Emitted when the Infinite Lives toggle changes.
 signal infinite_mode_toggled(enabled: bool)
 
-# Emitted when the debug "Knock Down" button is pressed.
+## Emitted when the debug "Knock Down" button is pressed.
 signal debug_knockdown_requested
 
-# Emitted when the "Show Input Buffer" toggle changes.
+## Emitted when the "Show Input Buffer" toggle changes.
 signal input_buffer_toggled(enabled: bool)
 
-# Emitted when a character is chosen in the Player / AI dropdowns.
+## Emitted when a character is chosen in the Player / AI dropdowns.
 signal player_character_selected(stats: FighterStats)
 signal ai_character_selected(stats: FighterStats)
 
@@ -31,12 +37,12 @@ signal ai_character_selected(stats: FighterStats)
 #endregion
 
 
-#region Privatestate
+#region Private state
 
 var _infinite_lives: bool = false
 var _ai_buttons: Dictionary = {}
 var _mode_button_group := ButtonGroup.new()
-var _characters: Array = []
+var _characters: Array[Dictionary] = []
 var _player_char_option: OptionButton
 var _ai_char_option: OptionButton
 
@@ -62,16 +68,15 @@ func _ready() -> void:
 #endregion
 
 
-#region PublicAPI
+#region Public API
 
 func set_active_ai_mode(mode: int) -> void:
 	for mode_key in _ai_buttons:
 		_ai_buttons[mode_key].button_pressed = mode_key == mode
 
 
-# Preselects the dropdowns to the characters currently in the match. Uses
-# OptionButton.select(), which does NOT emit item_selected, so this won't
-# trigger a reload.
+## Preselects the dropdowns to the characters currently in the match. Uses
+## OptionButton.select(), which does NOT emit item_selected, so this won't trigger a reload.
 func set_active_characters(player_stats: FighterStats, ai_stats: FighterStats) -> void:
 	_select_character(_player_char_option, player_stats)
 	_select_character(_ai_char_option, ai_stats)
@@ -79,7 +84,7 @@ func set_active_characters(player_stats: FighterStats, ai_stats: FighterStats) -
 #endregion
 
 
-#region Privatehelpers
+#region Private helpers
 
 func _on_pause_opened() -> void:
 	_panel.visible = true
@@ -164,15 +169,16 @@ func _select_character(option: OptionButton, stats: FighterStats) -> void:
 
 # Auto-discovers playable characters by scanning for FighterStats resources, so
 # dropping in a new *_fighter_stats.tres makes it selectable with no code change.
-func _discover_characters() -> Array:
-	var found: Array = []
-	var dir := DirAccess.open("res://scripts/resources/")
+func _discover_characters() -> Array[Dictionary]:
+	const CHARACTERS_DIR := "res://scripts/characters/"
+	var found: Array[Dictionary] = []
+	var dir := DirAccess.open(CHARACTERS_DIR)
 	if dir == null:
 		return found
 	for file in dir.get_files():
 		if not file.ends_with("fighter_stats.tres"):
 			continue
-		var res := load("res://scripts/resources/" + file)
+		var res := load(CHARACTERS_DIR + file)
 		if res is FighterStats:
 			found.append({"name": _character_display_name(res, file), "stats": res})
 	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.name < b.name)

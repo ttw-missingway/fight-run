@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="FighterStats" format=3 uid="uid://dlkuej0iaatye"]
-
-[ext_resource type="Resource" path="res://scripts/resources/default_projectile_config.tres" id="1_qsjlq"]
-[ext_resource type="Script" uid="uid://byjrhm16nd4kb" path="res://scripts/resources/fighter_stats.gd" id="2_o3mtp"]
-[ext_resource type="PackedScene" uid="uid://26s3h3h30ubi" path="res://scenes/characters/wolf.tscn" id="3_qsjlq"]
-
-[resource]
-script = ExtResource("2_o3mtp")
-visual_scene = ExtResource("3_qsjlq")

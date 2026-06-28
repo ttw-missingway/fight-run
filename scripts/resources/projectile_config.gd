@@ -20,6 +20,7 @@ class_name ProjectileConfig
 @export var air_low_spawn_offset: Vector2 = Vector2(38.0, -10.0)
 @export var max_lifetime: float = 2.5
 @export var size_similarity_ratio: float = 0.72
+@export var projectile_scene: PackedScene = preload("res://scenes/fight/projectile.tscn")
 
 
 func get_charge_ratio(charge_time: float) -> float:

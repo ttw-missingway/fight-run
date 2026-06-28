@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://mw1fe0u32o14" path="res://scripts/fight/hitbox.gd" id="3"]
 [ext_resource type="Script" uid="uid://x3rsvnvco8le" path="res://scripts/fight/grabbox.gd" id="4"]
 [ext_resource type="Script" uid="uid://ch5ffnjr3at82" path="res://scripts/fight/ai_controller.gd" id="5"]
-[ext_resource type="Resource" uid="uid://r5pmkr8k3jlr" path="res://scripts/resources/knight_fighter_stats.tres" id="6"]
+[ext_resource type="Resource" uid="uid://r5pmkr8k3jlr" path="res://scripts/characters/knight_fighter_stats.tres" id="6"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
 size = Vector2(32, 56)

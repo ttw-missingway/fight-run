@@ -3,8 +3,8 @@ extends Node2D
 const FIGHTER_SCENE := preload("res://scenes/fight/fighter.tscn")
 
 @export var stage_profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
-@export var player_stats: FighterStats = preload("res://scripts/resources/knight_fighter_stats.tres")
-@export var opponent_stats: FighterStats = preload("res://scripts/resources/minotaur_fighter_stats.tres")
+@export var player_stats: FighterStats = preload("res://scripts/characters/knight_fighter_stats.tres")
+@export var opponent_stats: FighterStats = preload("res://scripts/characters/minotaur_fighter_stats.tres")
 @export var debug_hitboxes: bool = true
 
 @onready var fight_manager: FightManager = $FightManager

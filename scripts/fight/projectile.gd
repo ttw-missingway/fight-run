@@ -69,7 +69,7 @@ func _resolve_spawn_offset(config: ProjectileConfig, on_floor: bool) -> Vector2:
 func _physics_process(delta: float) -> void:
 	if _destroyed:
 		return
-	global_position.x += direction * speed * delta
+	_apply_motion(delta)
 	_lifetime += delta
 	if _lifetime >= _max_lifetime:
 		destroy()
@@ -91,6 +91,10 @@ func _apply_size(size: Vector2) -> void:
 	collision_shape.position = Vector2.ZERO
 	body_rect.size = size
 	body_rect.position = -size * 0.5
+
+
+func _apply_motion(delta: float) -> void:
+	global_position.x += direction * speed * delta
 
 
 func take_hit(damage: int) -> void:

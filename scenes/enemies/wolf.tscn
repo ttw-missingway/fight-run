@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://26s3h3h30ubi"]
+
+[ext_resource type="Script" uid="uid://djl5jj6j8j7e6" path="res://scripts/characters/character_animator.gd" id="1_ptoh7"]
+[ext_resource type="SpriteFrames" uid="uid://c73gi54i7gygs" path="res://art/enemies/wolf/wolf_frames.tres" id="2_ptoh7"]
+
+[node name="Wolf" type="Node2D" unique_id=1966208949]
+scale = Vector2(2, 2)
+script = ExtResource("1_ptoh7")
+
+[node name="Sprite" type="AnimatedSprite2D" parent="." unique_id=1735163071]
+sprite_frames = ExtResource("2_ptoh7")
+animation = &"idle"
+autoplay = "idle"
+offset = Vector2(10, -24)

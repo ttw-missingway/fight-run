@@ -15,7 +15,6 @@ signal state_changed(fighter: Fighter, state_name: String)
 @export var is_player_controlled: bool = true
 
 const STATE_MACHINE_SCRIPT := preload("res://scripts/fight/fighter_state_machine.gd")
-const PROJECTILE_SCENE := preload("res://scenes/fight/projectile.tscn")
 
 var facing: int = 1
 var opponent: Fighter
@@ -51,6 +50,7 @@ var _virtual_projectile_charge: float = -1.0
 var _virtual_projectile_low: bool = false
 var _projectile_charging: bool = false
 var _projectile_auto_release: bool = false
+var _await_projectile_release: bool = false
 var _was_on_floor_last_frame: bool = false
 var _ledge_crouch_carry: bool = false
 var _airborne_crouch_frames: int = 0
@@ -59,6 +59,9 @@ var _w_getup_press_time: float = -1.0
 var _external_displacement_frames: int = 0
 var _hitstop_frames: int = 0
 var _hit_flash_timer: float = 0.0
+var _charge_flash_timer: float = 0.0
+var _charge_half_flashed: bool = false
+var _flash_material: ShaderMaterial
 var _air_forward_combo_step: int = 0
 var _jump_hold_frames: int = 0
 var _gamepad_up_was_held: bool = false
@@ -68,6 +71,8 @@ const EXTERNAL_DISPLACEMENT_FRAMES := 12
 const JUGGLE_ADVANCE_KNOCKBACK_RATIO := 1.0
 const DEFAULT_JUGGLE_KNOCKBACK_SCALE := 0.35
 const HIT_FLASH_DURATION := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
+const CHARGE_FLASH_DURATION := 0.18 * CombatTiming.FIGHT_TIMING_SCALE
+const CHARGE_FLASH_TIME_FRACTION := 0.5
 const FULL_HOP_HOLD_FRAMES := 4
 
 var state_machine: FighterStateMachine
@@ -101,7 +106,7 @@ var _input_buffer: FightInputBuffer
 
 func _ready() -> void:
 	if stats == null:
-		stats = preload("res://scripts/resources/knight_fighter_stats.tres")
+		stats = preload("res://scripts/characters/knight_fighter_stats.tres")
 	lives = stats.max_lives
 
 	state_machine = STATE_MACHINE_SCRIPT.new()
@@ -197,8 +202,26 @@ func _instance_visual_rig() -> void:
 	if stats == null or stats.visual_scene == null:
 		body_rect.visible = true
 		return
-	facing_pivot.add_child(stats.visual_scene.instantiate())
+	var rig := stats.visual_scene.instantiate()
+	facing_pivot.add_child(rig)
 	body_rect.visible = false
+	_setup_rig_flash(rig)
+
+
+# Shares one white-flash ShaderMaterial across every sprite in the rig so the hit
+# and charge flashes show on the art — body_rect (the placeholder flash target) is
+# hidden once a rig exists.
+func _setup_rig_flash(rig: Node) -> void:
+	_flash_material = ShaderMaterial.new()
+	_flash_material.shader = load("res://art/shaders/character_flash.gdshader")
+	_assign_flash_material(rig)
+
+
+func _assign_flash_material(node: Node) -> void:
+	if node is Sprite2D or node is AnimatedSprite2D:
+		(node as CanvasItem).material = _flash_material
+	for child in node.get_children():
+		_assign_flash_material(child)
 
 
 func get_dash_attack() -> AttackData:
@@ -268,6 +291,8 @@ func _physics_process(delta: float) -> void:
 	_update_visuals()
 	if _hit_flash_timer > 0.0:
 		_hit_flash_timer = maxf(0.0, _hit_flash_timer - delta)
+	if _charge_flash_timer > 0.0:
+		_charge_flash_timer = maxf(0.0, _charge_flash_timer - delta)
 	if _external_displacement_frames > 0:
 		_external_displacement_frames -= 1
 	if is_on_floor():
@@ -388,6 +413,11 @@ func is_in_hitstop() -> bool:
 
 func pulse_hit_flash() -> void:
 	_hit_flash_timer = HIT_FLASH_DURATION
+
+
+## Brief white body flash, fired once when a projectile charge first crosses half.
+func pulse_charge_flash() -> void:
+	_charge_flash_timer = CHARGE_FLASH_DURATION
 
 
 func _uses_external_displacement() -> bool:
@@ -1113,10 +1143,18 @@ func _handle_projectile_input(delta: float) -> void:
 		state_machine.tick_projectile_charge(delta)
 		if state_machine.projectile_startup_remaining > 0.0:
 			return
+		if not _charge_half_flashed and state_machine.get_projectile_charge_time_fraction() >= CHARGE_FLASH_TIME_FRACTION:
+			_charge_half_flashed = true
+			pulse_charge_flash()
 		if _projectile_auto_release and not _is_projectile_pressed():
 			_release_projectile_charge()
 			return
-		if _is_projectile_released() or state_machine.is_projectile_fully_charged():
+		var fully_charged := state_machine.is_projectile_fully_charged()
+		if _is_projectile_released() or fully_charged:
+			# A full-charge shot auto-fires; require a button release before the next
+			# charge so a continued hold can't immediately spawn a second coin.
+			if fully_charged:
+				_await_projectile_release = true
 			_release_projectile_charge()
 		return
 
@@ -1135,11 +1173,17 @@ func _handle_projectile_input(delta: float) -> void:
 	if _is_attack_intent_held():
 		return
 
+	if _await_projectile_release:
+		if not _is_projectile_pressed():
+			_await_projectile_release = false
+		return
+
 	if _is_projectile_pressed():
 		_projectile_auto_release = Input.is_action_just_pressed("projectile")
 		_clear_air_forward_combo()
 		state_machine.begin_projectile_charge(_is_down_pressed())
 		_projectile_charging = true
+		_charge_half_flashed = false
 
 
 func _release_projectile_charge() -> void:
@@ -1158,7 +1202,7 @@ func complete_projectile_startup() -> void:
 func _fire_projectile(charge_ratio: float, low_angle: bool = false) -> void:
 	if stats.projectile_config == null:
 		return
-	var projectile := PROJECTILE_SCENE.instantiate() as FightProjectile
+	var projectile := stats.projectile_config.projectile_scene.instantiate() as FightProjectile
 	get_parent().add_child(projectile)
 	projectile.setup(self, charge_ratio, stats.projectile_config, low_angle)
 
@@ -1997,6 +2041,16 @@ func _update_visuals() -> void:
 	if _hit_flash_timer > 0.0:
 		var flash_strength := clampf(_hit_flash_timer / HIT_FLASH_DURATION, 0.0, 1.0)
 		body_rect.color = body_rect.color.lerp(Color.WHITE, flash_strength * 0.82)
+
+	if _charge_flash_timer > 0.0:
+		var charge_strength := clampf(_charge_flash_timer / CHARGE_FLASH_DURATION, 0.0, 1.0)
+		body_rect.color = body_rect.color.lerp(Color.WHITE, charge_strength)
+
+	# Drive the same flashes onto the art rig (its sprite, not the hidden body_rect).
+	if _flash_material != null:
+		var hit_amount := clampf(_hit_flash_timer / HIT_FLASH_DURATION, 0.0, 1.0) * 0.82
+		var charge_amount := clampf(_charge_flash_timer / CHARGE_FLASH_DURATION, 0.0, 1.0)
+		_flash_material.set_shader_parameter("flash_amount", maxf(hit_amount, charge_amount))
 
 	_update_frame_overlays()
 

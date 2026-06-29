@@ -207,7 +207,7 @@ func _topple() -> void:
 	# Tip onto its side, then re-snap so the rotated sprite rests flush (its upright
 	# snap leaves it hovering), and fade out quickly before despawning.
 	spr.stop()
-	spr.frame = 0
+	spr.frame = 3
 	spr.rotation = deg_to_rad(_spin_degrees)
 	_snap_to_ground()
 	var tween := create_tween()

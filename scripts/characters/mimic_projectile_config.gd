@@ -11,14 +11,14 @@ class_name MimicProjectileConfig
 @export var gravity: float = 900.0
 
 ## Base arc peak height in px, before charge scaling.
-@export var arc_base_height: float = 57.0
+@export var arc_base_height: float = 150.0
 
 ## Base arc horizontal distance in px, before charge scaling.
-@export var arc_base_distance: float = 300.0
+@export var arc_base_distance: float = 200.0
 
 ## Charge stage multiplier for arc height AND distance per charge stage above base.
 ## 1.1 = +10% at half charge, +20% at full (applied additively, not compounding).
-@export var charge_stage_multiplier: float = 1.1
+@export var charge_stage_multiplier: float = 1.45
 
 ## Linger at full charge: how long the coin spins as an active hitbox before toppling.
 @export var ground_linger_seconds: float = 8.0

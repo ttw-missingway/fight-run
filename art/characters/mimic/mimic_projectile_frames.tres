@@ -26,10 +26,6 @@ region = Rect2(128, 0, 32, 32)
 atlas = ExtResource("1_bv0xy")
 region = Rect2(160, 0, 32, 32)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_4ugkq"]
-atlas = ExtResource("1_bv0xy")
-region = Rect2(192, 0, 32, 32)
-
 [resource]
 animations = [{
 "frames": [{
@@ -50,11 +46,8 @@ animations = [{
 }, {
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_4pjwy")
-}, {
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_4ugkq")
 }],
 "loop": true,
 "name": &"fly",
-"speed": 21.0
+"speed": 8.0
 }]

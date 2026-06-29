@@ -17,3 +17,4 @@ visible = false
 sprite_frames = ExtResource("2_5p754")
 animation = &"fly"
 autoplay = "fly"
+frame_progress = 0.30448958

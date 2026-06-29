@@ -6,10 +6,23 @@ extends CanvasLayer
 ## system should call get_tree().paused directly. Mode-specific overlays such as
 ## TrainingHUD react to the opened/closed signals instead.
 
+
+#region Signals
+
 signal opened
 signal closed
 
+#endregion
+
+
+#region Enums
+
 enum Screen { MAIN, CONTROLS }
+
+#endregion
+
+
+#region Private state
 
 var _root: Control
 var _main_screen: Control
@@ -25,6 +38,10 @@ var _rebind_button: Button
 var _rebind_buttons: Dictionary = {}
 var _gamepad_status_label: Label
 
+#endregion
+
+
+#region Lifecycle
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -37,30 +54,6 @@ func _ready() -> void:
 		Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_sync_ui_navigation()
 
-
-#region Public API
-
-func is_open() -> bool:
-	return _root.visible
-
-
-func open() -> void:
-	_root.visible = true
-	_show_screen(Screen.MAIN)
-	get_tree().paused = true
-	opened.emit()
-
-
-func close() -> void:
-	_cancel_rebind()
-	_root.visible = false
-	get_tree().paused = false
-	closed.emit()
-
-#endregion
-
-
-#region Input
 
 func _unhandled_input(event: InputEvent) -> void:
 	# A pending rebind captures the next key/button and swallows Esc to cancel.
@@ -86,6 +79,32 @@ func _process(_delta: float) -> void:
 	if _root.visible and _current_screen == Screen.CONTROLS and _gamepad_status_label != null:
 		_refresh_gamepad_status()
 
+#endregion
+
+
+#region Public API
+
+func is_open() -> bool:
+	return _root.visible
+
+
+func open() -> void:
+	_root.visible = true
+	_show_screen(Screen.MAIN)
+	get_tree().paused = true
+	opened.emit()
+
+
+func close() -> void:
+	_cancel_rebind()
+	_root.visible = false
+	get_tree().paused = false
+	closed.emit()
+
+#endregion
+
+
+#region Private helpers
 
 func _sync_ui_navigation() -> void:
 	# Let the controller's primary face button confirm menu items on any pad by
@@ -103,10 +122,6 @@ func _mirror_gamepad_events(from_action: String, to_action: String) -> void:
 			if not InputMap.action_has_event(to_action, event):
 				InputMap.action_add_event(to_action, event)
 
-#endregion
-
-
-#region Screen building
 
 func _build_ui() -> void:
 	_root = Control.new()
@@ -232,10 +247,6 @@ func _build_controls_screen() -> Control:
 
 	return panel
 
-#endregion
-
-
-#region Controls / rebinding
 
 func _add_rebind_row(label_text: String, action: String) -> void:
 	var row := HBoxContainer.new()

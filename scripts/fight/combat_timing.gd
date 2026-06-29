@@ -1,11 +1,18 @@
 extends RefCounted
 class_name CombatTiming
 
+
+#region Constants
+
 ## Uniform combat slowdown — preserves frame ratios, gives more time to read mixups.
 const FIGHT_TIMING_SCALE := 1.35
 
 const SECONDS_PER_FRAME := (1.0 / 60.0) * FIGHT_TIMING_SCALE
 
+#endregion
+
+
+#region Public API
 
 static func scale_time(seconds: float) -> float:
 	return seconds * FIGHT_TIMING_SCALE
@@ -25,3 +32,5 @@ static func scaled_hitstun(seconds: float) -> float:
 	if seconds < 0.0:
 		return seconds
 	return scale_time(seconds)
+
+#endregion

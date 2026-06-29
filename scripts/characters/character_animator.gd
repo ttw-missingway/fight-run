@@ -12,7 +12,7 @@ class_name CharacterAnimator
 #endregion
 
 
-#region Privatestate
+#region Private state
 
 var _fighter: Fighter
 var _current: StringName = &""
@@ -50,7 +50,7 @@ func _process(_delta: float) -> void:
 #endregion
 
 
-#region Privatehelpers
+#region Private helpers
 
 func _resolve(candidates: Array) -> StringName:
 	for candidate in candidates:

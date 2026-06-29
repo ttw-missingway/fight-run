@@ -1,6 +1,9 @@
 extends Resource
 class_name AttackData
 
+
+#region Enums
+
 enum RecoveryOutcome {
 	WHIFF,
 	HIT,
@@ -13,6 +16,11 @@ enum HitType {
 	KNOCKDOWN,
 	KILL,
 }
+
+#endregion
+
+
+#region Exports
 
 @export var id: String = "attack"
 @export var knockback: float = 200.0
@@ -50,6 +58,19 @@ enum HitType {
 @export var juggle_spike_velocity: float = 0.0
 @export var is_projectile: bool = false
 
+#endregion
+
+
+#region Public state
+
+# World X the knockback pushes away from. Only used when is_projectile; melee uses the
+# attacker's position instead.
+var source_x: float = 0.0
+
+#endregion
+
+
+#region Public API
 
 func get_recovery_frames(outcome: RecoveryOutcome) -> int:
 	match outcome:
@@ -65,3 +86,5 @@ func get_combo_link_frame() -> int:
 	if combo_link_frame >= 0:
 		return combo_link_frame
 	return startup_frames + active_frames
+
+#endregion

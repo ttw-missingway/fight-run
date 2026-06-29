@@ -1,6 +1,9 @@
 extends Node
 class_name AiController
 
+
+#region Enums
+
 enum BehaviorMode {
 	BLOCK,
 	DASH,
@@ -16,6 +19,11 @@ enum BehaviorMode {
 	SHOTO,
 	GRAPPLER,
 }
+
+#endregion
+
+
+#region Constants
 
 const SIMPLE_MODES: Array[BehaviorMode] = [
 	BehaviorMode.BLOCK,
@@ -68,6 +76,11 @@ const MODE_CATEGORY := {
 	BehaviorMode.GRAPPLER: "Complex",
 }
 
+#endregion
+
+
+#region Exports
+
 @export var enabled: bool = false
 @export var behavior_mode: BehaviorMode = BehaviorMode.BLOCK
 @export var think_interval: float = 0.27
@@ -78,6 +91,11 @@ const MODE_CATEGORY := {
 @export var zoner_panic_range: float = 75.0
 @export var shoto_center_band: float = 120.0
 @export var shoto_edge_margin: float = 140.0
+
+#endregion
+
+
+#region Private state
 
 var _fighter: Fighter
 var _think_timer: float = 0.0
@@ -96,12 +114,20 @@ var _pending_attack_name: String = ""
 var _hold_guard: bool = false
 var _hold_crouch: bool = false
 
+#endregion
+
+
+#region Lifecycle
 
 func _ready() -> void:
 	_fighter = get_parent() as Fighter
 	set_physics_process(false)
 	_reset_mode_state()
 
+#endregion
+
+
+#region Public API
 
 func get_mode_label() -> String:
 	return MODE_LABELS.get(behavior_mode, "Unknown")
@@ -114,28 +140,6 @@ func get_mode_category() -> String:
 func set_behavior_mode(mode: BehaviorMode) -> void:
 	behavior_mode = mode
 	_reset_mode_state()
-
-
-func _reset_mode_state() -> void:
-	_move_direction = 0
-	_think_timer = 0.0
-	_attack_cooldown = 0.0
-	_wakeup_triggered = false
-	_hold_guard = false
-	_hold_crouch = false
-	_engaged = _is_complex_mode()
-
-
-func _is_simple_mode() -> bool:
-	return behavior_mode in SIMPLE_MODES
-
-
-func _is_complex_mode() -> bool:
-	return behavior_mode in COMPLEX_MODES
-
-
-func _survival_active() -> bool:
-	return _is_complex_mode() or _engaged
 
 
 func notify_took_damage() -> void:
@@ -176,6 +180,32 @@ func update_input(delta: float) -> void:
 		_decide_action()
 
 	_emit_virtual_input()
+
+#endregion
+
+
+#region Private helpers
+
+func _reset_mode_state() -> void:
+	_move_direction = 0
+	_think_timer = 0.0
+	_attack_cooldown = 0.0
+	_wakeup_triggered = false
+	_hold_guard = false
+	_hold_crouch = false
+	_engaged = _is_complex_mode()
+
+
+func _is_simple_mode() -> bool:
+	return behavior_mode in SIMPLE_MODES
+
+
+func _is_complex_mode() -> bool:
+	return behavior_mode in COMPLEX_MODES
+
+
+func _survival_active() -> bool:
+	return _is_complex_mode() or _engaged
 
 
 func _emit_virtual_input() -> void:
@@ -576,3 +606,5 @@ func _pick_random_attack() -> void:
 			_pending_attack_name = "forward"
 		2:
 			_pending_attack_name = "down"
+
+#endregion

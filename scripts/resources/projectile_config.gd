@@ -1,6 +1,9 @@
 extends Resource
 class_name ProjectileConfig
 
+
+#region Exports
+
 @export var min_stagger: int = 4
 @export var max_stagger: int = 100
 @export var auto_kill_stagger: int = 100
@@ -21,7 +24,12 @@ class_name ProjectileConfig
 @export var max_lifetime: float = 2.5
 @export var size_similarity_ratio: float = 0.72
 @export var projectile_scene: PackedScene = preload("res://scenes/fight/projectile.tscn")
+@export var hit_effect_scene: PackedScene = preload("res://scenes/animations/projectile_hit.tscn")
 
+#endregion
+
+
+#region Public API
 
 func get_charge_ratio(charge_time: float) -> float:
 	var scaled_max := CombatTiming.scale_time(max_charge_time)
@@ -33,3 +41,5 @@ func get_charge_ratio(charge_time: float) -> float:
 	if log_cap <= 0.0:
 		return clampf(charge_time / scaled_max, 0.0, 1.0)
 	return log(1.0 + charge_time * charge_log_speed) / log_cap
+
+#endregion

@@ -1,6 +1,9 @@
 extends RefCounted
 class_name GamepadInput
 
+
+#region Constants
+
 const STICK_DEADZONE := 0.42
 const N64_STICK_DEADZONE := 0.48
 
@@ -24,6 +27,10 @@ const N64_DPAD_FALLBACK := {
 	"down": [JOY_BUTTON_DPAD_DOWN],
 }
 
+#endregion
+
+
+#region Public API
 
 static func get_primary_device() -> int:
 	var pads := Input.get_connected_joypads()
@@ -70,16 +77,6 @@ static func is_n64_adapter_device(device: int = -1) -> bool:
 
 static func is_retrobit_n64_device(device: int = -1) -> bool:
 	return is_n64_adapter_device(device)
-
-
-static func _joy_guid_matches_hyperkin_n64(device: int) -> bool:
-	var guid := Input.get_joy_guid(device).to_lower()
-	if guid.is_empty():
-		return false
-	# SDL-style GUIDs embed USB vendor/product as little-endian 16-bit values.
-	var has_vendor := HYPERKIN_VENDOR_ID in guid or "240e" in guid
-	var has_product := HYPERKIN_N64_ADAPTER_PRODUCT_ID in guid or "ff0b" in guid
-	return has_vendor and has_product
 
 
 static func get_move_direction() -> int:
@@ -149,6 +146,20 @@ static func poll_debug_lines(device: int = -1) -> PackedStringArray:
 		lines.append("Buttons: " + ", ".join(pressed))
 	return lines
 
+#endregion
+
+
+#region Private helpers
+
+static func _joy_guid_matches_hyperkin_n64(device: int) -> bool:
+	var guid := Input.get_joy_guid(device).to_lower()
+	if guid.is_empty():
+		return false
+	# SDL-style GUIDs embed USB vendor/product as little-endian 16-bit values.
+	var has_vendor := HYPERKIN_VENDOR_ID in guid or "240e" in guid
+	var has_product := HYPERKIN_N64_ADAPTER_PRODUCT_ID in guid or "ff0b" in guid
+	return has_vendor and has_product
+
 
 static func _read_stick_x(device: int) -> float:
 	var value := Input.get_joy_axis(device, JOY_AXIS_LEFT_X)
@@ -169,3 +180,5 @@ static func _is_any_pressed(device: int, button_indices: Array) -> bool:
 		if Input.is_joy_button_pressed(device, int(button_index)):
 			return true
 	return false
+
+#endregion

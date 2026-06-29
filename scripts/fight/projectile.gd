@@ -1,8 +1,24 @@
 extends Area2D
 class_name FightProjectile
 
+
+#region Constants
+
 const HURTBOX_LAYER := 4
 const PROJECTILE_LAYER := 16
+
+#endregion
+
+
+#region Onready
+
+@onready var collision_shape: CollisionShape2D = $CollisionShape2D
+@onready var body_rect: ColorRect = $BodyRect
+
+#endregion
+
+
+#region Public state
 
 var owner_fighter: Fighter
 var direction: int = 1
@@ -13,6 +29,12 @@ var knockback: float = 175.0
 var charge_ratio: float = 0.0
 var size_value: float = 14.0
 var is_low_angle: bool = false
+var hit_effect_scene: PackedScene
+
+#endregion
+
+
+#region Private state
 
 var _hit_fighters: Dictionary = {}
 var _destroyed: bool = false
@@ -20,9 +42,10 @@ var _lifetime: float = 0.0
 var _max_lifetime: float = 2.5
 var _size_similarity_ratio: float = 0.72
 
-@onready var collision_shape: CollisionShape2D = $CollisionShape2D
-@onready var body_rect: ColorRect = $BodyRect
+#endregion
 
+
+#region Lifecycle
 
 func _ready() -> void:
 	collision_layer = PROJECTILE_LAYER
@@ -31,6 +54,21 @@ func _ready() -> void:
 	monitorable = true
 	area_entered.connect(_on_area_entered)
 
+
+func _physics_process(delta: float) -> void:
+	if _destroyed:
+		return
+	_apply_motion(delta)
+	_lifetime += delta
+	if _lifetime >= _max_lifetime:
+		destroy()
+		return
+	_check_bounds()
+
+#endregion
+
+
+#region Public API
 
 func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_angle: bool = false) -> void:
 	owner_fighter = from_fighter
@@ -44,6 +82,7 @@ func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_a
 	health = int(lerpf(float(config.min_health), float(config.max_health), charge_ratio))
 	knockback = config.knockback
 	speed = config.speed
+	hit_effect_scene = config.hit_effect_scene
 	_max_lifetime = CombatTiming.scale_time(config.max_lifetime)
 	_size_similarity_ratio = config.size_similarity_ratio
 
@@ -58,43 +97,6 @@ func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_a
 
 	for area in get_overlapping_areas():
 		_on_area_entered(area)
-
-
-func _resolve_spawn_offset(config: ProjectileConfig, on_floor: bool) -> Vector2:
-	if is_low_angle:
-		return config.low_spawn_offset if on_floor else config.air_low_spawn_offset
-	return config.spawn_offset if on_floor else config.air_spawn_offset
-
-
-func _physics_process(delta: float) -> void:
-	if _destroyed:
-		return
-	_apply_motion(delta)
-	_lifetime += delta
-	if _lifetime >= _max_lifetime:
-		destroy()
-		return
-	_check_bounds()
-
-
-func _check_bounds() -> void:
-	var fm := owner_fighter.fight_manager if owner_fighter != null else null
-	if fm == null:
-		return
-	if global_position.x < fm.get_left_edge_x() - 80.0 or global_position.x > fm.get_right_edge_x() + 80.0:
-		destroy()
-
-
-func _apply_size(size: Vector2) -> void:
-	if collision_shape.shape is RectangleShape2D:
-		(collision_shape.shape as RectangleShape2D).size = size
-	collision_shape.position = Vector2.ZERO
-	body_rect.size = size
-	body_rect.position = -size * 0.5
-
-
-func _apply_motion(delta: float) -> void:
-	global_position.x += direction * speed * delta
 
 
 func take_hit(damage: int) -> void:
@@ -118,6 +120,7 @@ func get_attack_data() -> AttackData:
 	var data := AttackData.new()
 	data.id = "projectile"
 	data.is_projectile = true
+	data.source_x = global_position.x
 	data.knockback = knockback
 	data.stagger_value = stagger_damage
 	if stagger_damage >= 100:
@@ -132,6 +135,35 @@ func get_attack_data() -> AttackData:
 	data.hitstun_seconds = -1.0
 	return data
 
+#endregion
+
+
+#region Private helpers
+
+func _resolve_spawn_offset(config: ProjectileConfig, on_floor: bool) -> Vector2:
+	if is_low_angle:
+		return config.low_spawn_offset if on_floor else config.air_low_spawn_offset
+	return config.spawn_offset if on_floor else config.air_spawn_offset
+
+
+func _check_bounds() -> void:
+	var fm := owner_fighter.fight_manager if owner_fighter != null else null
+	if fm == null:
+		return
+	if global_position.x < fm.get_left_edge_x() - 80.0 or global_position.x > fm.get_right_edge_x() + 80.0:
+		destroy()
+
+
+func _apply_size(size: Vector2) -> void:
+	if collision_shape.shape is RectangleShape2D:
+		(collision_shape.shape as RectangleShape2D).size = size
+	collision_shape.position = Vector2.ZERO
+	body_rect.size = size
+	body_rect.position = -size * 0.5
+
+
+func _apply_motion(delta: float) -> void:
+	global_position.x += direction * speed * delta
 
 
 func _on_area_entered(area: Area2D) -> void:
@@ -156,7 +188,20 @@ func _try_hit_fighter(hurtbox: FightHurtbox) -> void:
 		return
 	_hit_fighters[victim_id] = true
 	victim.receive_hit(owner_fighter, get_attack_data())
+	# plays the projectile_hit_effect animation.
+	_on_hit_fighter(victim)
 	destroy()
+
+
+# Spawns the config's hit effect at the impact point, parented to the arena (a sibling)
+# since the projectile frees itself on this same hit. Override for custom behavior.
+func _on_hit_fighter(victim: Fighter) -> void:
+	if hit_effect_scene == null:
+		return
+	var fx := hit_effect_scene.instantiate() as Node2D
+	get_parent().add_child(fx)
+	# On the fighter (its x) at the height the projectile struck (the projectile's y).
+	fx.global_position = Vector2(victim.global_position.x, global_position.y)
 
 
 func _try_clash_with(other: FightProjectile) -> void:
@@ -186,3 +231,5 @@ func _resolve_projectile_clash(other: FightProjectile) -> void:
 	else:
 		destroy()
 		other.take_hit(stagger_damage)
+
+#endregion

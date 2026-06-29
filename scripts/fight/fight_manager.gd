@@ -1,12 +1,25 @@
 extends Node
 class_name FightManager
 
+
+#region Signals
+
 signal match_over(winner: Fighter, loser: Fighter)
 signal lives_changed(fighter: Fighter, lives: int)
+
+#endregion
+
+
+#region Constants
 
 const RESPAWN_BEAM_SCENE := preload("res://scenes/fight/respawn_beam.tscn")
 const RESPAWN_WINDOW := 5.0 * CombatTiming.FIGHT_TIMING_SCALE
 const AI_RESPAWN_DELAY := 2.0 * CombatTiming.FIGHT_TIMING_SCALE
+
+#endregion
+
+
+#region Exports
 
 @export var stage_profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
 @export var arena_bounds: Rect2 = Rect2(-760.0, -240.0, 1520.0, 480.0)
@@ -19,16 +32,42 @@ const AI_RESPAWN_DELAY := 2.0 * CombatTiming.FIGHT_TIMING_SCALE
 @export var spawn_height: float = 80.0
 @export var fall_death_margin: float = 6.0
 
+#endregion
+
+
+#region Public state
+
 var player: Fighter
 var opponent: Fighter
 var match_finished: bool = false
 var infinite_lives: bool = false
+
+#endregion
+
+
+#region Private state
 
 var _arena: Node
 var _active_beam: RespawnBeam
 var _pending_ai_respawn: bool = false
 var _ai_respawn_timer: float = 0.0
 
+#endregion
+
+
+#region Lifecycle
+
+func _process(delta: float) -> void:
+	if _pending_ai_respawn:
+		_ai_respawn_timer -= delta
+		if _ai_respawn_timer <= 0.0:
+			_pending_ai_respawn = false
+			_auto_respawn_ai()
+
+#endregion
+
+
+#region Public API
 
 func setup(arena: Node, player_fighter: Fighter, opponent_fighter: Fighter) -> void:
 	_arena = arena
@@ -79,37 +118,6 @@ func get_right_edge_x() -> float:
 	return platform_surface_half_width
 
 
-func _process(delta: float) -> void:
-	if _pending_ai_respawn:
-		_ai_respawn_timer -= delta
-		if _ai_respawn_timer <= 0.0:
-			_pending_ai_respawn = false
-			_auto_respawn_ai()
-
-
-func _on_fighter_died(fighter: Fighter) -> void:
-	_emit_lives(fighter)
-	if not infinite_lives and fighter.lives <= 0:
-		_finish_match(fighter)
-		return
-
-	if fighter.is_player_controlled:
-		_spawn_player_beam(fighter)
-	else:
-		_pending_ai_respawn = true
-		_ai_respawn_timer = AI_RESPAWN_DELAY
-
-
-func _spawn_player_beam(fighter: Fighter) -> void:
-	if _active_beam != null:
-		_active_beam.queue_free()
-	_active_beam = RESPAWN_BEAM_SCENE.instantiate()
-	_arena.add_child(_active_beam)
-	_active_beam.respawn_confirmed.connect(_on_player_respawn_confirmed)
-	_active_beam.expired.connect(_on_beam_expired)
-	_active_beam.setup(fighter, self, spawn_height, RESPAWN_WINDOW)
-
-
 func get_respawn_position(spawn_x: float) -> Vector2:
 	return Vector2(spawn_x, get_ground_y(spawn_x))
 
@@ -141,6 +149,33 @@ func is_outside_horizontal_blast_zone(x: float) -> bool:
 func is_below_local_ground(x: float, y: float) -> bool:
 	return y > get_ground_y(x) + fall_death_margin
 
+#endregion
+
+
+#region Private helpers
+
+func _on_fighter_died(fighter: Fighter) -> void:
+	_emit_lives(fighter)
+	if not infinite_lives and fighter.lives <= 0:
+		_finish_match(fighter)
+		return
+
+	if fighter.is_player_controlled:
+		_spawn_player_beam(fighter)
+	else:
+		_pending_ai_respawn = true
+		_ai_respawn_timer = AI_RESPAWN_DELAY
+
+
+func _spawn_player_beam(fighter: Fighter) -> void:
+	if _active_beam != null:
+		_active_beam.queue_free()
+	_active_beam = RESPAWN_BEAM_SCENE.instantiate()
+	_arena.add_child(_active_beam)
+	_active_beam.respawn_confirmed.connect(_on_player_respawn_confirmed)
+	_active_beam.expired.connect(_on_beam_expired)
+	_active_beam.setup(fighter, self, spawn_height, RESPAWN_WINDOW)
+
 
 func _on_player_respawn_confirmed(fighter: Fighter, spawn_x: float) -> void:
 	_active_beam = null
@@ -169,3 +204,5 @@ func _finish_match(loser: Fighter) -> void:
 
 func _emit_lives(fighter: Fighter) -> void:
 	lives_changed.emit(fighter, fighter.lives)
+
+#endregion

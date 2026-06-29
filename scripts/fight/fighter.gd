@@ -1,28 +1,19 @@
 extends CharacterBody2D
 class_name Fighter
 
+
+#region Signals
+
 signal died(fighter: Fighter)
 signal respawned(fighter: Fighter)
 signal state_changed(fighter: Fighter, state_name: String)
 
-@export var stats: FighterStats
-@export var body_color: Color = Color(0.2, 0.45, 0.95)
-@export var block_color: Color = Color(0.55, 0.62, 0.78)
-@export var guard_color: Color = Color(0.92, 0.96, 1.0, 0.95)
-@export var grab_color: Color = Color(0.98, 0.72, 0.18, 0.95)
-@export var iframe_color: Color = Color(0.15, 0.82, 1.0, 0.8)
-@export var vframe_color: Color = Color(1.0, 0.05, 0.45, 0.85)
-@export var is_player_controlled: bool = true
+#endregion
+
+
+#region Constants
 
 const STATE_MACHINE_SCRIPT := preload("res://scripts/fight/fighter_state_machine.gd")
-
-var facing: int = 1
-var opponent: Fighter
-var lives: int = 3
-var air_dash_used: bool = false
-var _last_move_tap_direction: int = 0
-var _last_move_tap_time: float = -1.0
-
 const DOUBLE_TAP_WINDOW := 0.28 * CombatTiming.FIGHT_TIMING_SCALE
 const BODY_HALF_WIDTH := 16.0
 const STANDING_HURTBOX_SIZE := Vector2(32.0, 56.0)
@@ -34,10 +25,93 @@ const ROLL_HURTBOX_OFFSET := Vector2(0.0, -11.0)
 const BODY_HEIGHT := 56.0
 const KNOCKDOWN_LAND_BOUNCE_DURATION := 0.22 * CombatTiming.FIGHT_TIMING_SCALE
 const KNOCKDOWN_LAND_BOUNCE_HEIGHT := 12.0
+const W_GETUP_HOLD_THRESHOLD := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
+const EXTERNAL_DISPLACEMENT_FRAMES := 12
+const JUGGLE_ADVANCE_KNOCKBACK_RATIO := 1.0
+const DEFAULT_JUGGLE_KNOCKBACK_SCALE := 0.35
+const HIT_FLASH_DURATION := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
+const CHARGE_FLASH_DURATION := 0.18 * CombatTiming.FIGHT_TIMING_SCALE
+const CHARGE_FLASH_TIME_FRACTION := 0.5
+const FULL_HOP_HOLD_FRAMES := 4
 
+# Shared fallbacks. A character's FighterStats can override any of these; when a
+# stats field is left empty we drop back to these so existing characters keep
+# working unchanged.
+const DEFAULT_ATTACKS := {
+	"neutral": preload("res://scripts/resources/attacks/jab.tres"),
+	"forward": preload("res://scripts/resources/attacks/forward_strike.tres"),
+	"down": preload("res://scripts/resources/attacks/down_strike.tres"),
+	"anti_air": preload("res://scripts/resources/attacks/anti_air.tres"),
+	"back_overhead": preload("res://scripts/resources/attacks/back_overhead.tres"),
+	"back_retreat": preload("res://scripts/resources/attacks/back_retreat.tres"),
+	"air_neutral": preload("res://scripts/resources/attacks/air_neutral.tres"),
+	"air_forward": preload("res://scripts/resources/attacks/air_forward.tres"),
+	"air_forward_2": preload("res://scripts/resources/attacks/air_forward_2.tres"),
+	"air_forward_3": preload("res://scripts/resources/attacks/air_forward_3.tres"),
+	"air_overhead": preload("res://scripts/resources/attacks/air_overhead.tres"),
+	"air_up": preload("res://scripts/resources/attacks/air_up.tres"),
+}
+const DEFAULT_DASH_ATTACK := preload("res://scripts/resources/attacks/dash_attack.tres")
+const DEFAULT_WAKEUP_ATTACK := preload("res://scripts/resources/attacks/wakeup_attack.tres")
+const DEFAULT_GRAB := preload("res://scripts/resources/grabs/default_throw.tres")
+
+#endregion
+
+
+#region Exports
+
+@export var stats: FighterStats
+@export var body_color: Color = Color(0.2, 0.45, 0.95)
+@export var block_color: Color = Color(0.55, 0.62, 0.78)
+@export var guard_color: Color = Color(0.92, 0.96, 1.0, 0.95)
+@export var grab_color: Color = Color(0.98, 0.72, 0.18, 0.95)
+@export var iframe_color: Color = Color(0.15, 0.82, 1.0, 0.8)
+@export var vframe_color: Color = Color(1.0, 0.05, 0.45, 0.85)
+@export var is_player_controlled: bool = true
+
+#endregion
+
+
+#region Onready
+
+@onready var body_rect: ColorRect = $FacingPivot/BodyRect
+@onready var guard_indicator: ColorRect = $FacingPivot/GuardIndicator
+@onready var iframe_overlay: ColorRect = $FacingPivot/IFrameOverlay
+@onready var vframe_overlay: ColorRect = $FacingPivot/VFrameOverlay
+@onready var facing_pivot: Node2D = $FacingPivot
+@onready var body_collision_shape: CollisionShape2D = $CollisionShape2D
+@onready var hurtbox: FightHurtbox = $FacingPivot/Hurtbox
+@onready var hitbox: FightHitbox = $FacingPivot/Hitbox
+@onready var grabbox: FightGrabbox = $FacingPivot/Grabbox
+@onready var hurtbox_shape: CollisionShape2D = $FacingPivot/Hurtbox/CollisionShape2D
+@onready var hitbox_shape: CollisionShape2D = $FacingPivot/Hitbox/CollisionShape2D
+@onready var hurtbox_debug: ColorRect = $FacingPivot/Hurtbox/HurtboxDebug
+@onready var hitbox_debug: ColorRect = $FacingPivot/Hitbox/HitboxDebug
+@onready var grabbox_debug: ColorRect = $FacingPivot/Grabbox/GrabboxDebug
+@onready var ai_controller: AiController = $AiController
+
+#endregion
+
+
+#region Public state
+
+var facing: int = 1
+var opponent: Fighter
+var lives: int = 3
+var air_dash_used: bool = false
+var state_machine: FighterStateMachine
+var fight_manager: FightManager
+var stagger_meter_label: Label
+
+#endregion
+
+
+#region Private state
+
+var _last_move_tap_direction: int = 0
+var _last_move_tap_time: float = -1.0
 var _virtual_throw_direction: int = 0
 var _grab_hold_timer: float = 0.0
-
 var _virtual_left: bool = false
 var _virtual_right: bool = false
 var _virtual_jump_pulse: bool = false
@@ -65,37 +139,6 @@ var _flash_material: ShaderMaterial
 var _air_forward_combo_step: int = 0
 var _jump_hold_frames: int = 0
 var _gamepad_up_was_held: bool = false
-
-const W_GETUP_HOLD_THRESHOLD := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
-const EXTERNAL_DISPLACEMENT_FRAMES := 12
-const JUGGLE_ADVANCE_KNOCKBACK_RATIO := 1.0
-const DEFAULT_JUGGLE_KNOCKBACK_SCALE := 0.35
-const HIT_FLASH_DURATION := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
-const CHARGE_FLASH_DURATION := 0.18 * CombatTiming.FIGHT_TIMING_SCALE
-const CHARGE_FLASH_TIME_FRACTION := 0.5
-const FULL_HOP_HOLD_FRAMES := 4
-
-var state_machine: FighterStateMachine
-var fight_manager: FightManager
-
-@onready var body_rect: ColorRect = $FacingPivot/BodyRect
-@onready var guard_indicator: ColorRect = $FacingPivot/GuardIndicator
-@onready var iframe_overlay: ColorRect = $FacingPivot/IFrameOverlay
-@onready var vframe_overlay: ColorRect = $FacingPivot/VFrameOverlay
-@onready var facing_pivot: Node2D = $FacingPivot
-@onready var body_collision_shape: CollisionShape2D = $CollisionShape2D
-@onready var hurtbox: FightHurtbox = $FacingPivot/Hurtbox
-@onready var hitbox: FightHitbox = $FacingPivot/Hitbox
-@onready var grabbox: FightGrabbox = $FacingPivot/Grabbox
-@onready var hurtbox_shape: CollisionShape2D = $FacingPivot/Hurtbox/CollisionShape2D
-@onready var hitbox_shape: CollisionShape2D = $FacingPivot/Hitbox/CollisionShape2D
-@onready var hurtbox_debug: ColorRect = $FacingPivot/Hurtbox/HurtboxDebug
-@onready var hitbox_debug: ColorRect = $FacingPivot/Hitbox/HitboxDebug
-@onready var grabbox_debug: ColorRect = $FacingPivot/Grabbox/GrabboxDebug
-@onready var ai_controller: AiController = $AiController
-
-var stagger_meter_label: Label
-
 var _attacks: Dictionary = {}
 var _dash_attack: AttackData
 var _wakeup_attack: AttackData
@@ -103,6 +146,10 @@ var _grab: GrabData
 var _debug_enabled: bool = false
 var _input_buffer: FightInputBuffer
 
+#endregion
+
+
+#region Lifecycle
 
 func _ready() -> void:
 	if stats == null:
@@ -133,99 +180,6 @@ func _ready() -> void:
 		ai_controller.enabled = true
 	else:
 		ai_controller.enabled = false
-
-
-func _setup_stagger_meter_label() -> void:
-	stagger_meter_label = Label.new()
-	stagger_meter_label.name = "StaggerMeterLabel"
-	stagger_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stagger_meter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	stagger_meter_label.position = Vector2(-24.0, -76.0)
-	stagger_meter_label.size = Vector2(48.0, 18.0)
-	stagger_meter_label.add_theme_font_size_override("font_size", 14)
-	stagger_meter_label.add_theme_color_override("font_color", Color.WHITE)
-	stagger_meter_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	stagger_meter_label.add_theme_constant_override("outline_size", 4)
-	stagger_meter_label.visible = false
-	facing_pivot.add_child(stagger_meter_label)
-
-
-func _update_stagger_meter_display() -> void:
-	if stagger_meter_label == null:
-		return
-	var should_show := state_machine.stagger_meter > 0 and (
-		state_machine.current_state == FighterStateMachine.State.STAGGER
-		or not is_on_floor()
-	)
-	stagger_meter_label.visible = should_show
-	if should_show:
-		stagger_meter_label.text = str(state_machine.stagger_meter)
-
-# Shared fallbacks. A character's FighterStats can override any of these; when a
-# stats field is left empty we drop back to these so existing characters keep
-# working unchanged.
-const DEFAULT_ATTACKS := {
-	"neutral": preload("res://scripts/resources/attacks/jab.tres"),
-	"forward": preload("res://scripts/resources/attacks/forward_strike.tres"),
-	"down": preload("res://scripts/resources/attacks/down_strike.tres"),
-	"anti_air": preload("res://scripts/resources/attacks/anti_air.tres"),
-	"back_overhead": preload("res://scripts/resources/attacks/back_overhead.tres"),
-	"back_retreat": preload("res://scripts/resources/attacks/back_retreat.tres"),
-	"air_neutral": preload("res://scripts/resources/attacks/air_neutral.tres"),
-	"air_forward": preload("res://scripts/resources/attacks/air_forward.tres"),
-	"air_forward_2": preload("res://scripts/resources/attacks/air_forward_2.tres"),
-	"air_forward_3": preload("res://scripts/resources/attacks/air_forward_3.tres"),
-	"air_overhead": preload("res://scripts/resources/attacks/air_overhead.tres"),
-	"air_up": preload("res://scripts/resources/attacks/air_up.tres"),
-}
-const DEFAULT_DASH_ATTACK := preload("res://scripts/resources/attacks/dash_attack.tres")
-const DEFAULT_WAKEUP_ATTACK := preload("res://scripts/resources/attacks/wakeup_attack.tres")
-const DEFAULT_GRAB := preload("res://scripts/resources/grabs/default_throw.tres")
-
-
-# Builds this fighter's move set from its stats Resource, falling back to the
-# shared defaults for any field the character data leaves unset.
-func _load_attacks() -> void:
-	if stats != null and not stats.attacks.is_empty():
-		_attacks = stats.attacks.duplicate()
-	else:
-		_attacks = DEFAULT_ATTACKS.duplicate()
-	_dash_attack = stats.dash_attack if stats != null and stats.dash_attack != null else DEFAULT_DASH_ATTACK
-	_wakeup_attack = stats.wakeup_attack if stats != null and stats.wakeup_attack != null else DEFAULT_WAKEUP_ATTACK
-	_grab = stats.grab_data if stats != null and stats.grab_data != null else DEFAULT_GRAB
-
-
-# Instances the character's visual rig (stats.visual_scene) under FacingPivot so
-# it flips with the fighter and is driven by its CharacterAnimator. Characters
-# without a rig keep the placeholder BodyRect as a fallback.
-func _instance_visual_rig() -> void:
-	if stats == null or stats.visual_scene == null:
-		body_rect.visible = true
-		return
-	var rig := stats.visual_scene.instantiate()
-	facing_pivot.add_child(rig)
-	body_rect.visible = false
-	_setup_rig_flash(rig)
-
-
-# Shares one white-flash ShaderMaterial across every sprite in the rig so the hit
-# and charge flashes show on the art — body_rect (the placeholder flash target) is
-# hidden once a rig exists.
-func _setup_rig_flash(rig: Node) -> void:
-	_flash_material = ShaderMaterial.new()
-	_flash_material.shader = load("res://art/shaders/character_flash.gdshader")
-	_assign_flash_material(rig)
-
-
-func _assign_flash_material(node: Node) -> void:
-	if node is Sprite2D or node is AnimatedSprite2D:
-		(node as CanvasItem).material = _flash_material
-	for child in node.get_children():
-		_assign_flash_material(child)
-
-
-func get_dash_attack() -> AttackData:
-	return _dash_attack
 
 
 func _physics_process(delta: float) -> void:
@@ -299,6 +253,558 @@ func _physics_process(delta: float) -> void:
 		_clear_air_forward_combo()
 	if is_player_controlled:
 		_gamepad_up_was_held = GamepadInput.is_up_pressed()
+
+#endregion
+
+
+#region Public API
+
+func get_dash_attack() -> AttackData:
+	return _dash_attack
+
+
+func mark_external_displacement(frames: int = EXTERNAL_DISPLACEMENT_FRAMES) -> void:
+	_external_displacement_frames = maxi(_external_displacement_frames, frames)
+
+
+func apply_hitstop(frames: int) -> void:
+	if frames <= 0:
+		return
+	_hitstop_frames = maxi(_hitstop_frames, frames)
+
+
+func is_in_hitstop() -> bool:
+	return _hitstop_frames > 0
+
+
+func pulse_hit_flash() -> void:
+	_hit_flash_timer = HIT_FLASH_DURATION
+
+
+## Brief white body flash, fired once when a projectile charge first crosses half.
+func pulse_charge_flash() -> void:
+	_charge_flash_timer = CHARGE_FLASH_DURATION
+
+
+func should_preserve_crouch_air_state() -> bool:
+	return _ledge_crouch_carry and (state_machine.is_crouching() or _is_crouch_intent_held())
+
+
+func set_virtual_input(
+	left: bool,
+	right: bool,
+	jump: bool,
+	guard: bool = false,
+	crouch: bool = false,
+	attack_name: String = "",
+	throw_attempt: bool = false,
+	throw_direction: int = 0,
+	projectile_charge: float = -1.0,
+	projectile_low: bool = false,
+	short_hop: bool = true
+) -> void:
+	_virtual_left = left
+	_virtual_right = right
+	if jump:
+		_virtual_jump_pulse = true
+		_virtual_jump_short = short_hop
+	_virtual_guard = guard
+	_virtual_down = crouch
+	_virtual_throw = throw_attempt
+	_virtual_throw_direction = throw_direction
+	if attack_name != "":
+		_virtual_attack_name = attack_name
+	if projectile_charge >= 0.0:
+		_virtual_projectile_charge = projectile_charge
+	if projectile_low:
+		_virtual_projectile_low = true
+
+
+func clear_virtual_input() -> void:
+	set_virtual_input(false, false, false, false, false, "", false, 0, -1.0, false)
+
+
+func is_crouch_held() -> bool:
+	if state_machine.is_knocked_down() or state_machine.is_on_ledge():
+		return false
+	if not _is_grounded_for_stance():
+		return false
+	if not state_machine.can_hold_guard() and not state_machine.is_crouching():
+		return false
+	return _is_crouch_intent_held()
+
+
+func is_guard_held() -> bool:
+	if not _is_grounded_for_stance():
+		return false
+	if not state_machine.can_hold_guard() and not state_machine.is_blocking():
+		return false
+	if is_player_controlled:
+		return Input.is_action_pressed("guard") or _virtual_guard
+	return _virtual_guard
+
+
+func resolve_standing_state() -> void:
+	if state_machine.is_on_ledge():
+		return
+	if not is_on_floor():
+		if should_preserve_crouch_air_state():
+			state_machine.change_state(FighterStateMachine.State.CROUCH)
+		else:
+			state_machine.change_state(FighterStateMachine.State.IDLE)
+		return
+	if is_crouch_held():
+		if is_guard_held():
+			state_machine.change_state(FighterStateMachine.State.CROUCH_BLOCK)
+		else:
+			state_machine.change_state(FighterStateMachine.State.CROUCH)
+	elif is_guard_held():
+		state_machine.change_state(FighterStateMachine.State.BLOCK)
+	elif _get_move_direction() != 0:
+		state_machine.change_state(FighterStateMachine.State.MOVE)
+	else:
+		state_machine.change_state(FighterStateMachine.State.IDLE)
+	_ensure_not_orphaned_action_state()
+
+
+func build_input_snapshot() -> Dictionary:
+	var move_dir := _get_move_direction()
+	return {
+		"facing": facing,
+		"move_dir": move_dir,
+		"up": _input_buffer.is_up_held(),
+		"down": _is_crouch_intent_held(),
+		"on_floor": is_on_floor(),
+	}
+
+
+func resolve_buffered_attack_name(snap: Dictionary) -> String:
+	if not snap.get("on_floor", is_on_floor()):
+		if snap.get("down", false):
+			return "air_overhead"
+		if snap.get("up", false):
+			return "air_up"
+		var air_move_dir := int(snap.get("move_dir", 0))
+		var air_snap_facing := int(snap.get("facing", facing))
+		if air_move_dir != 0 and air_move_dir == -air_snap_facing:
+			return "back_retreat"
+		if air_move_dir == air_snap_facing:
+			return _get_air_forward_chain_attack()
+		return "air_neutral"
+	if not is_on_floor():
+		return ""
+	var attack_name := str(snap.get("attack_name", ""))
+	if attack_name != "":
+		return attack_name
+	var move_dir := int(snap.get("move_dir", 0))
+	var snap_facing := int(snap.get("facing", facing))
+	if snap.get("down", false):
+		return "down"
+	if move_dir != 0 and move_dir == -snap_facing:
+		return "back_overhead"
+	if move_dir == snap_facing:
+		return "forward"
+	return "neutral"
+
+
+func try_execute_action_queue() -> bool:
+	return _try_execute_action_queue()
+
+
+func get_input_queue_display_text() -> String:
+	return _input_buffer.get_queue_display_text()
+
+
+func request_dash(direction: int) -> void:
+	_try_dash(direction)
+
+
+func finish_dash() -> void:
+	var dash_dir := state_machine.dash_direction
+	if is_on_floor():
+		velocity.x = 0.0
+	else:
+		velocity.x = dash_dir * stats.dash_speed * stats.dash_air_momentum_carry
+
+
+func request_throw() -> void:
+	_try_throw()
+
+
+func consume_combo_follow_up() -> AttackData:
+	return state_machine.consume_combo_follow_up()
+
+
+func complete_projectile_startup() -> void:
+	var low_angle := state_machine.is_projectile_low_angle()
+	_fire_projectile(state_machine.projectile_pending_charge, low_angle)
+	state_machine.finish_projectile_startup()
+
+
+func perform_fast_get_up() -> void:
+	state_machine.begin_knockdown_wakeup(FighterStateMachine.WakeupOption.NEUTRAL)
+
+
+func debug_force_knockdown() -> void:
+	if not is_player_controlled:
+		return
+	if not state_machine.is_active_in_match():
+		return
+	if state_machine.current_state in [
+		FighterStateMachine.State.DEAD,
+		FighterStateMachine.State.RESPAWN,
+		FighterStateMachine.State.GRABBED,
+	]:
+		return
+
+	set_hitbox_active(false)
+	set_grabbox_active(false)
+	state_machine.clear_oki_punish_window()
+	state_machine.reset_stagger_meter()
+
+	if fight_manager != null:
+		_snap_feet_to_ground()
+
+	_begin_knockdown_from_impulse(Vector2.ZERO)
+	state_machine.knockdown_was_airborne = true
+	state_machine.knockdown_landed = true
+	state_machine.knockdown_landed_at = (
+		state_machine.state_time
+		- FighterStateMachine.KNOCKDOWN_GROUND_INVINCIBLE_DURATION
+		- 0.05
+	)
+	velocity = Vector2.ZERO
+	on_knockdown_landed()
+	_update_visuals()
+
+
+func perform_ledge_get_up() -> void:
+	perform_ledge_wakeup(FighterStateMachine.WakeupOption.NEUTRAL)
+
+
+func perform_ledge_wakeup(option: FighterStateMachine.WakeupOption) -> void:
+	if not state_machine.begin_ledge_wakeup(option):
+		return
+	_reset_wakeup_w_press()
+	var side := state_machine.ledge_side
+	facing = -side if side != 0 else facing
+	facing_pivot.scale.x = float(facing)
+	_ledge_crouch_carry = false
+	_airborne_crouch_frames = 0
+	_virtual_jump_pulse = false
+	_virtual_attack_name = ""
+	_update_visuals()
+
+
+func get_wakeup_attack() -> AttackData:
+	return _wakeup_attack
+
+
+func perform_wakeup_followup_attack() -> void:
+	if fight_manager != null:
+		_snap_feet_to_ground()
+	velocity = Vector2.ZERO
+	var attack_name := _resolve_attack_from_direction()
+	if attack_name.begins_with("air_"):
+		attack_name = "neutral"
+	_try_attack(attack_name)
+
+
+func perform_wakeup_followup_grab() -> void:
+	if fight_manager != null:
+		_snap_feet_to_ground()
+	velocity = Vector2.ZERO
+	state_machine.start_grab(_grab)
+
+
+func set_grabbox_active(active: bool) -> void:
+	if active and state_machine.current_grab != null:
+		grabbox.activate(state_machine.current_grab)
+		_update_grabbox_debug(state_machine.current_grab)
+		grabbox_debug.visible = _debug_enabled
+	else:
+		grabbox.deactivate()
+		grabbox_debug.visible = false
+
+
+func set_hitbox_active(active: bool) -> void:
+	if active and state_machine.current_attack != null:
+		hitbox.activate(state_machine.current_attack)
+		_update_hitbox_debug(state_machine.current_attack)
+		hitbox_debug.visible = _debug_enabled
+	else:
+		hitbox.deactivate()
+		hitbox_debug.visible = false
+
+
+func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
+	if not state_machine.is_active_in_match():
+		return
+	if state_machine.is_invincible():
+		return
+	if state_machine.is_knockdown_falling():
+		return
+
+	if state_machine.is_holding_grab():
+		state_machine.release_held_grab()
+
+	if state_machine.is_grabbing():
+		set_grabbox_active(false)
+
+	var knockback_source_x: float = attack_data.source_x if attack_data.is_projectile else attacker.global_position.x
+	var direction: int = int(signf(global_position.x - knockback_source_x))
+	if direction == 0:
+		direction = attacker.facing
+
+	if _try_resolve_guard_hit(attacker, attack_data, direction):
+		return
+
+	if state_machine.is_dash_vulnerable():
+		state_machine.reset_stagger_meter()
+		_begin_knockdown_from_impulse(
+			_build_knockdown_impulse(direction, attack_data.knockback)
+		)
+		if not is_player_controlled and ai_controller.enabled:
+			ai_controller.notify_took_damage()
+		return
+
+	if state_machine.is_vulnerable():
+		_kill()
+		return
+
+	if not is_on_floor():
+		_apply_airborne_hit(attacker, attack_data, direction)
+		return
+
+	if attack_data.launch_velocity < 0.0:
+		_apply_launcher_hit(attacker, attack_data, direction)
+		return
+
+	var horizontal_kb := direction * attack_data.knockback * _get_knockback_taken_multiplier()
+	match attack_data.hit_type:
+		AttackData.HitType.KNOCKDOWN:
+			var knockdown_stagger_kb := (
+				direction
+				* attack_data.knockback
+				* _get_knockback_taken_multiplier()
+				* stats.stagger_knockback_multiplier
+			)
+			var knockdown_stagger_hitstun := attack_data.hitstun_seconds
+			if state_machine.apply_stagger_hit(
+				attacker,
+				attack_data.stagger_value,
+				knockdown_stagger_kb,
+				knockdown_stagger_hitstun
+			):
+				_begin_knockdown_from_impulse(
+					_build_knockdown_impulse(direction, attack_data.knockback)
+				)
+		AttackData.HitType.STUN:
+			state_machine.enter_stun(horizontal_kb, not is_on_floor())
+		AttackData.HitType.STAGGER:
+			var stagger_kb := (
+				direction
+				* attack_data.knockback
+				* _get_knockback_taken_multiplier()
+				* stats.stagger_knockback_multiplier
+			)
+			var stagger_hitstun := attack_data.hitstun_seconds
+			if state_machine.apply_stagger_hit(
+				attacker,
+				attack_data.stagger_value,
+				stagger_kb,
+				stagger_hitstun
+			):
+				_begin_knockdown_from_impulse(
+					_build_knockdown_impulse(direction, attack_data.knockback)
+				)
+		AttackData.HitType.KILL:
+			_kill()
+
+	if not is_player_controlled and ai_controller.enabled:
+		ai_controller.notify_took_damage()
+
+
+func try_receive_grab(thrower: Fighter, grab_data: GrabData) -> bool:
+	if not state_machine.is_active_in_match():
+		return false
+	if not is_on_floor():
+		return false
+	if state_machine.is_invincible():
+		return false
+	if state_machine.is_grabbed():
+		return false
+	if state_machine.is_knocked_down():
+		return false
+	if state_machine.is_in_hitstun():
+		return false
+	if state_machine.is_attacking():
+		return false
+	if state_machine.is_grabbing():
+		return false
+	if state_machine.is_attack_active():
+		return false
+	if state_machine.is_crouching():
+		return false
+
+	state_machine.enter_grabbed(thrower, grab_data)
+	return true
+
+
+func apply_throw_from(thrower: Fighter, grab_data: GrabData, throw_vector: int) -> void:
+	set_hitbox_active(false)
+	set_grabbox_active(false)
+	state_machine.grabbed_by = null
+	state_machine.current_grab = null
+	if throw_vector == 0:
+		throw_vector = -thrower.facing
+	var throw_impulse := _build_knockdown_impulse(
+		throw_vector,
+		grab_data.throw_knockback
+	)
+	_begin_knockdown_from_impulse(throw_impulse, true)
+
+
+func release_from_grab() -> void:
+	state_machine.release_from_grab()
+	velocity = Vector2.ZERO
+
+
+func respawn_at(spawn_position: Vector2) -> void:
+	var spawn_x := spawn_position.x
+	var spawn_y := spawn_position.y
+	if fight_manager != null:
+		spawn_y = fight_manager.get_respawn_drop_y()
+	global_position = Vector2(spawn_x, spawn_y)
+	velocity = Vector2.ZERO
+	_reset_facing_pivot_transform()
+	visible = true
+	hurtbox.monitorable = true
+	state_machine.enter_respawn()
+	_input_buffer.reset()
+	_projectile_charging = false
+	_projectile_auto_release = false
+	move_and_slide()
+	respawned.emit(self)
+	_update_visuals()
+
+
+func on_knockdown_landed() -> void:
+	if fight_manager != null:
+		global_position.y = fight_manager.get_ground_y(global_position.x)
+	velocity = Vector2.ZERO
+	_reset_wakeup_w_press()
+	_update_visuals()
+
+
+func on_state_changed(next_state: FighterStateMachine.State) -> void:
+	if next_state != FighterStateMachine.State.ATTACK:
+		set_hitbox_active(false)
+	if next_state != FighterStateMachine.State.GRAB:
+		set_grabbox_active(false)
+	_update_hurtbox_profile()
+	_update_visuals()
+	state_changed.emit(self, state_machine.get_state_name())
+
+
+func snap_to_ledge(side: int) -> void:
+	if fight_manager == null:
+		return
+	global_position = fight_manager.get_ledge_hang_position(side, BODY_HALF_WIDTH, BODY_HEIGHT)
+	velocity = Vector2.ZERO
+	facing = -side if side != 0 else facing
+	facing_pivot.scale.x = float(facing)
+
+
+func start_ledge_regrab_lockout(duration: float = 1.5) -> void:
+	_ledge_regrab_lockout = duration
+
+
+func is_ledge_crouch_airborne() -> bool:
+	return _ledge_crouch_carry and not is_on_floor()
+
+
+func set_debug_visible(enabled: bool) -> void:
+	_debug_enabled = enabled
+	hurtbox_debug.visible = enabled
+	hitbox_debug.visible = enabled and hitbox.monitoring
+	grabbox_debug.visible = enabled and grabbox.monitoring
+	if enabled and state_machine != null and state_machine.current_attack != null:
+		_update_hitbox_debug(state_machine.current_attack)
+	if enabled and state_machine != null and state_machine.current_grab != null:
+		_update_grabbox_debug(state_machine.current_grab)
+
+#endregion
+
+
+#region Private helpers
+
+func _setup_stagger_meter_label() -> void:
+	stagger_meter_label = Label.new()
+	stagger_meter_label.name = "StaggerMeterLabel"
+	stagger_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stagger_meter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	stagger_meter_label.position = Vector2(-24.0, -76.0)
+	stagger_meter_label.size = Vector2(48.0, 18.0)
+	stagger_meter_label.add_theme_font_size_override("font_size", 14)
+	stagger_meter_label.add_theme_color_override("font_color", Color.WHITE)
+	stagger_meter_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	stagger_meter_label.add_theme_constant_override("outline_size", 4)
+	stagger_meter_label.visible = false
+	facing_pivot.add_child(stagger_meter_label)
+
+
+func _update_stagger_meter_display() -> void:
+	if stagger_meter_label == null:
+		return
+	var should_show := state_machine.stagger_meter > 0 and (
+		state_machine.current_state == FighterStateMachine.State.STAGGER
+		or not is_on_floor()
+	)
+	stagger_meter_label.visible = should_show
+	if should_show:
+		stagger_meter_label.text = str(state_machine.stagger_meter)
+
+
+# Builds this fighter's move set from its stats Resource, falling back to the
+# shared defaults for any field the character data leaves unset.
+func _load_attacks() -> void:
+	if stats != null and not stats.attacks.is_empty():
+		_attacks = stats.attacks.duplicate()
+	else:
+		_attacks = DEFAULT_ATTACKS.duplicate()
+	_dash_attack = stats.dash_attack if stats != null and stats.dash_attack != null else DEFAULT_DASH_ATTACK
+	_wakeup_attack = stats.wakeup_attack if stats != null and stats.wakeup_attack != null else DEFAULT_WAKEUP_ATTACK
+	_grab = stats.grab_data if stats != null and stats.grab_data != null else DEFAULT_GRAB
+
+
+# Instances the character's visual rig (stats.visual_scene) under FacingPivot so
+# it flips with the fighter and is driven by its CharacterAnimator. Characters
+# without a rig keep the placeholder BodyRect as a fallback.
+func _instance_visual_rig() -> void:
+	if stats == null or stats.visual_scene == null:
+		body_rect.visible = true
+		return
+	var rig := stats.visual_scene.instantiate()
+	facing_pivot.add_child(rig)
+	body_rect.visible = false
+	_setup_rig_flash(rig)
+
+
+# Shares one white-flash ShaderMaterial across every sprite in the rig so the hit
+# and charge flashes show on the art — body_rect (the placeholder flash target) is
+# hidden once a rig exists.
+func _setup_rig_flash(rig: Node) -> void:
+	_flash_material = ShaderMaterial.new()
+	_flash_material.shader = load("res://art/shaders/character_flash.gdshader")
+	_assign_flash_material(rig)
+
+
+func _assign_flash_material(node: Node) -> void:
+	if node is Sprite2D or node is AnimatedSprite2D:
+		(node as CanvasItem).material = _flash_material
+	for child in node.get_children():
+		_assign_flash_material(child)
 
 
 func _clear_air_forward_combo() -> void:
@@ -397,29 +903,6 @@ func _wants_super_jump() -> bool:
 	return _input_buffer.is_recent("move_down")
 
 
-func mark_external_displacement(frames: int = EXTERNAL_DISPLACEMENT_FRAMES) -> void:
-	_external_displacement_frames = maxi(_external_displacement_frames, frames)
-
-
-func apply_hitstop(frames: int) -> void:
-	if frames <= 0:
-		return
-	_hitstop_frames = maxi(_hitstop_frames, frames)
-
-
-func is_in_hitstop() -> bool:
-	return _hitstop_frames > 0
-
-
-func pulse_hit_flash() -> void:
-	_hit_flash_timer = HIT_FLASH_DURATION
-
-
-## Brief white body flash, fired once when a projectile charge first crosses half.
-func pulse_charge_flash() -> void:
-	_charge_flash_timer = CHARGE_FLASH_DURATION
-
-
 func _uses_external_displacement() -> bool:
 	return _external_displacement_frames > 0
 
@@ -428,93 +911,12 @@ func _is_grounded_for_stance() -> bool:
 	return is_on_floor() or state_machine.is_crouching()
 
 
-func should_preserve_crouch_air_state() -> bool:
-	return _ledge_crouch_carry and (state_machine.is_crouching() or _is_crouch_intent_held())
-
-
-func set_virtual_input(
-	left: bool,
-	right: bool,
-	jump: bool,
-	guard: bool = false,
-	crouch: bool = false,
-	attack_name: String = "",
-	throw_attempt: bool = false,
-	throw_direction: int = 0,
-	projectile_charge: float = -1.0,
-	projectile_low: bool = false,
-	short_hop: bool = true
-) -> void:
-	_virtual_left = left
-	_virtual_right = right
-	if jump:
-		_virtual_jump_pulse = true
-		_virtual_jump_short = short_hop
-	_virtual_guard = guard
-	_virtual_down = crouch
-	_virtual_throw = throw_attempt
-	_virtual_throw_direction = throw_direction
-	if attack_name != "":
-		_virtual_attack_name = attack_name
-	if projectile_charge >= 0.0:
-		_virtual_projectile_charge = projectile_charge
-	if projectile_low:
-		_virtual_projectile_low = true
-
-
-func clear_virtual_input() -> void:
-	set_virtual_input(false, false, false, false, false, "", false, 0, -1.0, false)
-
-
-func is_crouch_held() -> bool:
-	if state_machine.is_knocked_down() or state_machine.is_on_ledge():
-		return false
-	if not _is_grounded_for_stance():
-		return false
-	if not state_machine.can_hold_guard() and not state_machine.is_crouching():
-		return false
-	return _is_crouch_intent_held()
-
-
 func _is_crouch_intent_held() -> bool:
 	if is_player_controlled:
 		if Input.is_action_pressed("move_down") or _virtual_down:
 			return true
 		return GamepadInput.is_down_pressed()
 	return _virtual_down
-
-
-func is_guard_held() -> bool:
-	if not _is_grounded_for_stance():
-		return false
-	if not state_machine.can_hold_guard() and not state_machine.is_blocking():
-		return false
-	if is_player_controlled:
-		return Input.is_action_pressed("guard") or _virtual_guard
-	return _virtual_guard
-
-
-func resolve_standing_state() -> void:
-	if state_machine.is_on_ledge():
-		return
-	if not is_on_floor():
-		if should_preserve_crouch_air_state():
-			state_machine.change_state(FighterStateMachine.State.CROUCH)
-		else:
-			state_machine.change_state(FighterStateMachine.State.IDLE)
-		return
-	if is_crouch_held():
-		if is_guard_held():
-			state_machine.change_state(FighterStateMachine.State.CROUCH_BLOCK)
-		else:
-			state_machine.change_state(FighterStateMachine.State.CROUCH)
-	elif is_guard_held():
-		state_machine.change_state(FighterStateMachine.State.BLOCK)
-	elif _get_move_direction() != 0:
-		state_machine.change_state(FighterStateMachine.State.MOVE)
-	else:
-		state_machine.change_state(FighterStateMachine.State.IDLE)
-	_ensure_not_orphaned_action_state()
 
 
 func _ensure_not_orphaned_action_state() -> void:
@@ -831,54 +1233,6 @@ func _handle_actions() -> void:
 		return
 
 
-func build_input_snapshot() -> Dictionary:
-	var move_dir := _get_move_direction()
-	return {
-		"facing": facing,
-		"move_dir": move_dir,
-		"up": _input_buffer.is_up_held(),
-		"down": _is_crouch_intent_held(),
-		"on_floor": is_on_floor(),
-	}
-
-
-func resolve_buffered_attack_name(snap: Dictionary) -> String:
-	if not snap.get("on_floor", is_on_floor()):
-		if snap.get("down", false):
-			return "air_overhead"
-		if snap.get("up", false):
-			return "air_up"
-		var air_move_dir := int(snap.get("move_dir", 0))
-		var air_snap_facing := int(snap.get("facing", facing))
-		if air_move_dir != 0 and air_move_dir == -air_snap_facing:
-			return "back_retreat"
-		if air_move_dir == air_snap_facing:
-			return _get_air_forward_chain_attack()
-		return "air_neutral"
-	if not is_on_floor():
-		return ""
-	var attack_name := str(snap.get("attack_name", ""))
-	if attack_name != "":
-		return attack_name
-	var move_dir := int(snap.get("move_dir", 0))
-	var snap_facing := int(snap.get("facing", facing))
-	if snap.get("down", false):
-		return "down"
-	if move_dir != 0 and move_dir == -snap_facing:
-		return "back_overhead"
-	if move_dir == snap_facing:
-		return "forward"
-	return "neutral"
-
-
-func try_execute_action_queue() -> bool:
-	return _try_execute_action_queue()
-
-
-func get_input_queue_display_text() -> String:
-	return _input_buffer.get_queue_display_text()
-
-
 func _try_execute_action_queue() -> bool:
 	if not is_player_controlled:
 		return false
@@ -1028,10 +1382,6 @@ func _sync_grabbed_position() -> void:
 	facing_pivot.scale.x = float(facing)
 
 
-func request_dash(direction: int) -> void:
-	_try_dash(direction)
-
-
 func _poll_double_tap_dash() -> void:
 	if not is_player_controlled:
 		return
@@ -1068,18 +1418,6 @@ func _try_dash(direction: int) -> void:
 	state_machine.start_dash(direction)
 
 
-func finish_dash() -> void:
-	var dash_dir := state_machine.dash_direction
-	if is_on_floor():
-		velocity.x = 0.0
-	else:
-		velocity.x = dash_dir * stats.dash_speed * stats.dash_air_momentum_carry
-
-
-func request_throw() -> void:
-	_try_throw()
-
-
 func _try_throw() -> void:
 	if state_machine.current_state == FighterStateMachine.State.GRAB:
 		return
@@ -1102,10 +1440,6 @@ func _try_buffer_combo_input() -> void:
 	else:
 		return
 	state_machine.buffer_combo_follow_up()
-
-
-func consume_combo_follow_up() -> AttackData:
-	return state_machine.consume_combo_follow_up()
 
 
 func _try_attack(attack_name: String) -> void:
@@ -1193,12 +1527,6 @@ func _release_projectile_charge() -> void:
 	_projectile_auto_release = false
 
 
-func complete_projectile_startup() -> void:
-	var low_angle := state_machine.is_projectile_low_angle()
-	_fire_projectile(state_machine.projectile_pending_charge, low_angle)
-	state_machine.finish_projectile_startup()
-
-
 func _fire_projectile(charge_ratio: float, low_angle: bool = false) -> void:
 	if stats.projectile_config == null:
 		return
@@ -1235,88 +1563,12 @@ func _is_projectile_released() -> bool:
 	return Input.is_action_just_released("projectile")
 
 
-func perform_fast_get_up() -> void:
-	state_machine.begin_knockdown_wakeup(FighterStateMachine.WakeupOption.NEUTRAL)
-
-
 func _snap_feet_to_ground(x: float = -1.0) -> void:
 	if fight_manager == null:
 		return
 	if x < 0.0:
 		x = global_position.x
 	global_position.y = fight_manager.get_ground_y(x)
-
-
-func debug_force_knockdown() -> void:
-	if not is_player_controlled:
-		return
-	if not state_machine.is_active_in_match():
-		return
-	if state_machine.current_state in [
-		FighterStateMachine.State.DEAD,
-		FighterStateMachine.State.RESPAWN,
-		FighterStateMachine.State.GRABBED,
-	]:
-		return
-
-	set_hitbox_active(false)
-	set_grabbox_active(false)
-	state_machine.clear_oki_punish_window()
-	state_machine.reset_stagger_meter()
-
-	if fight_manager != null:
-		_snap_feet_to_ground()
-
-	_begin_knockdown_from_impulse(Vector2.ZERO)
-	state_machine.knockdown_was_airborne = true
-	state_machine.knockdown_landed = true
-	state_machine.knockdown_landed_at = (
-		state_machine.state_time
-		- FighterStateMachine.KNOCKDOWN_GROUND_INVINCIBLE_DURATION
-		- 0.05
-	)
-	velocity = Vector2.ZERO
-	on_knockdown_landed()
-	_update_visuals()
-
-
-func perform_ledge_get_up() -> void:
-	perform_ledge_wakeup(FighterStateMachine.WakeupOption.NEUTRAL)
-
-
-func perform_ledge_wakeup(option: FighterStateMachine.WakeupOption) -> void:
-	if not state_machine.begin_ledge_wakeup(option):
-		return
-	_reset_wakeup_w_press()
-	var side := state_machine.ledge_side
-	facing = -side if side != 0 else facing
-	facing_pivot.scale.x = float(facing)
-	_ledge_crouch_carry = false
-	_airborne_crouch_frames = 0
-	_virtual_jump_pulse = false
-	_virtual_attack_name = ""
-	_update_visuals()
-
-
-func get_wakeup_attack() -> AttackData:
-	return _wakeup_attack
-
-
-func perform_wakeup_followup_attack() -> void:
-	if fight_manager != null:
-		_snap_feet_to_ground()
-	velocity = Vector2.ZERO
-	var attack_name := _resolve_attack_from_direction()
-	if attack_name.begins_with("air_"):
-		attack_name = "neutral"
-	_try_attack(attack_name)
-
-
-func perform_wakeup_followup_grab() -> void:
-	if fight_manager != null:
-		_snap_feet_to_ground()
-	velocity = Vector2.ZERO
-	state_machine.start_grab(_grab)
 
 
 func _try_begin_prone_wakeup(from_ledge: bool) -> void:
@@ -1454,116 +1706,9 @@ func _just_pressed_guard_while_prone() -> bool:
 	return _virtual_guard
 
 
-func set_grabbox_active(active: bool) -> void:
-	if active and state_machine.current_grab != null:
-		grabbox.activate(state_machine.current_grab)
-		_update_grabbox_debug(state_machine.current_grab)
-		grabbox_debug.visible = _debug_enabled
-	else:
-		grabbox.deactivate()
-		grabbox_debug.visible = false
-
-
-func set_hitbox_active(active: bool) -> void:
-	if active and state_machine.current_attack != null:
-		hitbox.activate(state_machine.current_attack)
-		_update_hitbox_debug(state_machine.current_attack)
-		hitbox_debug.visible = _debug_enabled
-	else:
-		hitbox.deactivate()
-		hitbox_debug.visible = false
-
-
 func _break_juggle_with(attacker: Fighter) -> void:
 	if attacker != null:
 		attacker.state_machine.clear_combo_buffer()
-
-
-func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
-	if not state_machine.is_active_in_match():
-		return
-	if state_machine.is_invincible():
-		return
-	if state_machine.is_knockdown_falling():
-		return
-
-	if state_machine.is_holding_grab():
-		state_machine.release_held_grab()
-
-	if state_machine.is_grabbing():
-		set_grabbox_active(false)
-
-	var direction: int = int(signf(global_position.x - attacker.global_position.x))
-	if direction == 0:
-		direction = attacker.facing
-
-	if _try_resolve_guard_hit(attacker, attack_data, direction):
-		return
-
-	if state_machine.is_dash_vulnerable():
-		state_machine.reset_stagger_meter()
-		_begin_knockdown_from_impulse(
-			_build_knockdown_impulse(direction, attack_data.knockback)
-		)
-		if not is_player_controlled and ai_controller.enabled:
-			ai_controller.notify_took_damage()
-		return
-
-	if state_machine.is_vulnerable():
-		_kill()
-		return
-
-	if not is_on_floor():
-		_apply_airborne_hit(attacker, attack_data, direction)
-		return
-
-	if attack_data.launch_velocity < 0.0:
-		_apply_launcher_hit(attacker, attack_data, direction)
-		return
-
-	var horizontal_kb := direction * attack_data.knockback * _get_knockback_taken_multiplier()
-	match attack_data.hit_type:
-		AttackData.HitType.KNOCKDOWN:
-			var knockdown_stagger_kb := (
-				direction
-				* attack_data.knockback
-				* _get_knockback_taken_multiplier()
-				* stats.stagger_knockback_multiplier
-			)
-			var knockdown_stagger_hitstun := attack_data.hitstun_seconds
-			if state_machine.apply_stagger_hit(
-				attacker,
-				attack_data.stagger_value,
-				knockdown_stagger_kb,
-				knockdown_stagger_hitstun
-			):
-				_begin_knockdown_from_impulse(
-					_build_knockdown_impulse(direction, attack_data.knockback)
-				)
-		AttackData.HitType.STUN:
-			state_machine.enter_stun(horizontal_kb, not is_on_floor())
-		AttackData.HitType.STAGGER:
-			var stagger_kb := (
-				direction
-				* attack_data.knockback
-				* _get_knockback_taken_multiplier()
-				* stats.stagger_knockback_multiplier
-			)
-			var stagger_hitstun := attack_data.hitstun_seconds
-			if state_machine.apply_stagger_hit(
-				attacker,
-				attack_data.stagger_value,
-				stagger_kb,
-				stagger_hitstun
-			):
-				_begin_knockdown_from_impulse(
-					_build_knockdown_impulse(direction, attack_data.knockback)
-				)
-		AttackData.HitType.KILL:
-			_kill()
-
-	if not is_player_controlled and ai_controller.enabled:
-		ai_controller.notify_took_damage()
 
 
 func _try_resolve_guard_hit(attacker: Fighter, attack_data: AttackData, direction: int) -> bool:
@@ -1630,51 +1775,6 @@ func _begin_knockdown_from_impulse(
 		velocity = impulse
 
 
-func try_receive_grab(thrower: Fighter, grab_data: GrabData) -> bool:
-	if not state_machine.is_active_in_match():
-		return false
-	if not is_on_floor():
-		return false
-	if state_machine.is_invincible():
-		return false
-	if state_machine.is_grabbed():
-		return false
-	if state_machine.is_knocked_down():
-		return false
-	if state_machine.is_in_hitstun():
-		return false
-	if state_machine.is_attacking():
-		return false
-	if state_machine.is_grabbing():
-		return false
-	if state_machine.is_attack_active():
-		return false
-	if state_machine.is_crouching():
-		return false
-
-	state_machine.enter_grabbed(thrower, grab_data)
-	return true
-
-
-func apply_throw_from(thrower: Fighter, grab_data: GrabData, throw_vector: int) -> void:
-	set_hitbox_active(false)
-	set_grabbox_active(false)
-	state_machine.grabbed_by = null
-	state_machine.current_grab = null
-	if throw_vector == 0:
-		throw_vector = -thrower.facing
-	var throw_impulse := _build_knockdown_impulse(
-		throw_vector,
-		grab_data.throw_knockback
-	)
-	_begin_knockdown_from_impulse(throw_impulse, true)
-
-
-func release_from_grab() -> void:
-	state_machine.release_from_grab()
-	velocity = Vector2.ZERO
-
-
 func _kill() -> void:
 	if state_machine.is_holding_grab():
 		state_machine.release_held_grab()
@@ -1692,25 +1792,6 @@ func _kill() -> void:
 	died.emit(self)
 
 
-func respawn_at(spawn_position: Vector2) -> void:
-	var spawn_x := spawn_position.x
-	var spawn_y := spawn_position.y
-	if fight_manager != null:
-		spawn_y = fight_manager.get_respawn_drop_y()
-	global_position = Vector2(spawn_x, spawn_y)
-	velocity = Vector2.ZERO
-	_reset_facing_pivot_transform()
-	visible = true
-	hurtbox.monitorable = true
-	state_machine.enter_respawn()
-	_input_buffer.reset()
-	_projectile_charging = false
-	_projectile_auto_release = false
-	move_and_slide()
-	respawned.emit(self)
-	_update_visuals()
-
-
 func _check_respawn_landing() -> void:
 	if not state_machine.is_respawn_falling():
 		return
@@ -1721,24 +1802,6 @@ func _check_respawn_landing() -> void:
 	velocity = Vector2.ZERO
 	state_machine.land_respawn()
 	_update_visuals()
-
-
-func on_knockdown_landed() -> void:
-	if fight_manager != null:
-		global_position.y = fight_manager.get_ground_y(global_position.x)
-	velocity = Vector2.ZERO
-	_reset_wakeup_w_press()
-	_update_visuals()
-
-
-func on_state_changed(next_state: FighterStateMachine.State) -> void:
-	if next_state != FighterStateMachine.State.ATTACK:
-		set_hitbox_active(false)
-	if next_state != FighterStateMachine.State.GRAB:
-		set_grabbox_active(false)
-	_update_hurtbox_profile()
-	_update_visuals()
-	state_changed.emit(self, state_machine.get_state_name())
 
 
 func _check_stage_bounds() -> void:
@@ -1766,15 +1829,6 @@ func _update_ground_state() -> void:
 	)
 
 
-func snap_to_ledge(side: int) -> void:
-	if fight_manager == null:
-		return
-	global_position = fight_manager.get_ledge_hang_position(side, BODY_HALF_WIDTH, BODY_HEIGHT)
-	velocity = Vector2.ZERO
-	facing = -side if side != 0 else facing
-	facing_pivot.scale.x = float(facing)
-
-
 func _check_wakeup_roll_ledge_contact() -> void:
 	if not state_machine.is_wakeup_rolling() or state_machine.wakeup_roll_from_ledge:
 		return
@@ -1790,14 +1844,6 @@ func _check_wakeup_roll_ledge_contact() -> void:
 		var hang_x := fight_manager.get_ledge_hang_x(1, BODY_HALF_WIDTH)
 		if global_position.x >= hang_x - 6.0:
 			state_machine.snap_wakeup_roll_to_ledge(1)
-
-
-func start_ledge_regrab_lockout(duration: float = 1.5) -> void:
-	_ledge_regrab_lockout = duration
-
-
-func is_ledge_crouch_airborne() -> bool:
-	return _ledge_crouch_carry and not is_on_floor()
 
 
 func _update_ledge_climb_animation() -> void:
@@ -2173,17 +2219,6 @@ func _on_grab_landed(victim: Fighter, grab_data: GrabData) -> void:
 	if victim.try_receive_grab(self, grab_data):
 		state_machine.begin_grab_hold(victim)
 		velocity.x = 0.0
-
-
-func set_debug_visible(enabled: bool) -> void:
-	_debug_enabled = enabled
-	hurtbox_debug.visible = enabled
-	hitbox_debug.visible = enabled and hitbox.monitoring
-	grabbox_debug.visible = enabled and grabbox.monitoring
-	if enabled and state_machine != null and state_machine.current_attack != null:
-		_update_hitbox_debug(state_machine.current_attack)
-	if enabled and state_machine != null and state_machine.current_grab != null:
-		_update_grabbox_debug(state_machine.current_grab)
 
 
 func _update_grabbox_debug(grab_data: GrabData) -> void:
@@ -2712,3 +2747,5 @@ func _clear_pending_attack_input() -> void:
 	_virtual_attack_name = ""
 
 # Dylan is a menace.
+
+#endregion

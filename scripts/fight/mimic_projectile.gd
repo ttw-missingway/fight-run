@@ -49,6 +49,7 @@ func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_a
 	super(from_fighter, charge, config, low_angle)
 	var mc := config as MimicProjectileConfig
 	_gravity = mc.gravity
+	knockback = mc.knockback_strength
 	# Coin charge affects only linger duration and arc size; damage/hitbox are fixed.
 	var tier := _charge_tier(charge_ratio, mc)
 	_linger_seconds = _linger_for_tier(tier, mc)

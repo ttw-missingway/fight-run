@@ -1,14 +1,37 @@
 extends Area2D
 class_name FightHitbox
 
+
+#region Signals
+
 signal hit_landed(victim: CharacterBody2D, attack_data: Resource)
+
+#endregion
+
+
+#region Constants
+
+const PROJECTILE_LAYER := 16
+
+#endregion
+
+
+#region Public state
 
 var owner_fighter: CharacterBody2D
 var attack_data: Resource
+
+#endregion
+
+
+#region Private state
+
 var _hit_victims: Dictionary = {}
 
+#endregion
 
-const PROJECTILE_LAYER := 16
+
+#region Public API
 
 func setup(owner_body: CharacterBody2D) -> void:
 	owner_fighter = owner_body
@@ -39,6 +62,10 @@ func deactivate() -> void:
 	attack_data = null
 	_hit_victims.clear()
 
+#endregion
+
+
+#region Private helpers
 
 func _on_area_entered(area: Area2D) -> void:
 	if attack_data == null or owner_fighter == null:
@@ -67,3 +94,5 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 	_hit_victims[victim.get_instance_id()] = true
 	hit_landed.emit(victim, attack_data)
+
+#endregion

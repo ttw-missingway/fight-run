@@ -1,6 +1,9 @@
 extends Resource
 class_name StageProfile
 
+
+#region Exports
+
 ## Walkable half-width from center. Full stage span is half_width * 2.
 @export var half_width: float = 720.0
 ## Width of each sloped transition between side flats and the center dip.
@@ -14,6 +17,10 @@ class_name StageProfile
 @export var floor_thickness: float = 56.0
 @export var gameplay_inset: float = 24.0
 
+#endregion
+
+
+#region Public API
 
 func get_edge_flat_width() -> float:
 	return maxf(0.0, half_width - center_flat_half_width - slope_width)
@@ -147,3 +154,5 @@ func get_visual_polygon() -> PackedVector2Array:
 		Vector2(left_slope_start, edge_ground_y + thick),
 		Vector2(-half_width, edge_ground_y + thick),
 	])
+
+#endregion

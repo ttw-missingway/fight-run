@@ -1,6 +1,9 @@
 extends RefCounted
 class_name ControlSettings
 
+
+#region Constants
+
 const SAVE_PATH := "user://input_bindings.json"
 
 const REMAPPABLE_ACTIONS: Array[Dictionary] = [
@@ -90,6 +93,10 @@ const N64_BUTTON_LABELS := {
 	10: "N64 Start",
 }
 
+#endregion
+
+
+#region Public API
 
 static func load_bindings() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
@@ -155,44 +162,12 @@ static func migrate_retrobit_if_needed() -> void:
 	save_bindings()
 
 
-static func _jump_bound_to_xbox_a() -> bool:
-	for ev in InputMap.action_get_events("jump"):
-		if ev is InputEventJoypadButton and ev.button_index == JOY_BUTTON_A:
-			return true
-	return false
-
-
 static func reset_to_defaults() -> void:
 	if GamepadInput.is_retrobit_n64_device():
 		apply_n64_dinput_bindings()
 	else:
 		apply_default_bindings()
 	save_bindings()
-
-
-static func _apply_gamepad_preset(
-	button_map: Dictionary,
-	motion_map: Dictionary,
-	deadzone: float
-) -> void:
-	for entry in REMAPPABLE_ACTIONS:
-		var action: String = entry["action"]
-		if not InputMap.has_action(action):
-			continue
-		InputMap.action_erase_events(action)
-		if DEFAULT_PHYSICAL_KEYS.has(action):
-			InputMap.action_add_event(action, _make_key_event(int(DEFAULT_PHYSICAL_KEYS[action])))
-		if button_map.has(action):
-			for button_index in button_map[action]:
-				InputMap.action_add_event(action, _make_joy_button_event(int(button_index)))
-		if motion_map.has(action):
-			for motion in motion_map[action]:
-				InputMap.action_add_event(
-					action,
-					_make_joy_motion_event(int(motion["axis"]), float(motion["axis_value"]))
-				)
-		InputMap.action_set_deadzone(action, deadzone)
-	_apply_mirror_actions("attack")
 
 
 static func remap_action(action: String, event: InputEvent) -> void:
@@ -236,6 +211,42 @@ static func get_controls_summary() -> String:
 		var action: String = entry["action"]
 		parts.append("%s %s" % [entry["label"], get_action_display_name(action)])
 	return "  ·  ".join(parts)
+
+#endregion
+
+
+#region Private helpers
+
+static func _jump_bound_to_xbox_a() -> bool:
+	for ev in InputMap.action_get_events("jump"):
+		if ev is InputEventJoypadButton and ev.button_index == JOY_BUTTON_A:
+			return true
+	return false
+
+
+static func _apply_gamepad_preset(
+	button_map: Dictionary,
+	motion_map: Dictionary,
+	deadzone: float
+) -> void:
+	for entry in REMAPPABLE_ACTIONS:
+		var action: String = entry["action"]
+		if not InputMap.has_action(action):
+			continue
+		InputMap.action_erase_events(action)
+		if DEFAULT_PHYSICAL_KEYS.has(action):
+			InputMap.action_add_event(action, _make_key_event(int(DEFAULT_PHYSICAL_KEYS[action])))
+		if button_map.has(action):
+			for button_index in button_map[action]:
+				InputMap.action_add_event(action, _make_joy_button_event(int(button_index)))
+		if motion_map.has(action):
+			for motion in motion_map[action]:
+				InputMap.action_add_event(
+					action,
+					_make_joy_motion_event(int(motion["axis"]), float(motion["axis_value"]))
+				)
+		InputMap.action_set_deadzone(action, deadzone)
+	_apply_mirror_actions("attack")
 
 
 static func _deserialize_save(data: Dictionary) -> void:
@@ -418,3 +429,5 @@ static func _format_joy_motion_event(event: InputEventJoypadMotion) -> String:
 	if event.axis == JOY_AXIS_LEFT_Y:
 		return "L Stick ↑" if event.axis_value < 0.0 else "L Stick ↓"
 	return "Axis %d" % event.axis
+
+#endregion

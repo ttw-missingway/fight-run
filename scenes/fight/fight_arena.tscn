@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://c746b6akvkso" path="res://scripts/fight/fight_arena.gd" id="1"]
 [ext_resource type="Script" uid="uid://c24aspvaxad63" path="res://scripts/fight/fight_manager.gd" id="2"]
-[ext_resource type="PackedScene" uid="uid://matchhud001" path="res://ui/match_hud.tscn" id="3"]
+[ext_resource type="PackedScene" uid="uid://matchhud001" path="res://scenes/ui/match_hud.tscn" id="3"]
 [ext_resource type="Script" uid="uid://2ty83lg6e0bs" path="res://scripts/fight/stage_geometry.gd" id="4"]
 [ext_resource type="PackedScene" uid="uid://dkn014cludlup" path="res://scenes/ui/training_hud.tscn" id="5_mtkym"]
 

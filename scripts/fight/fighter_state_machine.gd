@@ -1,6 +1,9 @@
 extends Node
 class_name FighterStateMachine
 
+
+#region Enums
+
 enum State {
 	IDLE,
 	MOVE,
@@ -24,6 +27,7 @@ enum State {
 	RESPAWN,
 }
 
+
 enum WakeupOption {
 	NEUTRAL,
 	BLOCK,
@@ -36,6 +40,11 @@ enum WakeupOption {
 	SLOW,
 }
 
+#endregion
+
+
+#region Constants
+
 const KNOCKDOWN_FALL_DURATION := 0.38 * CombatTiming.FIGHT_TIMING_SCALE
 const KNOCKDOWN_FORCED_GROUND_DURATION := 1.0 * CombatTiming.FIGHT_TIMING_SCALE
 const KNOCKDOWN_GROUND_INVINCIBLE_DURATION := 1.25 * CombatTiming.FIGHT_TIMING_SCALE
@@ -46,6 +55,16 @@ const PUNISH_WINDOW_DURATION := 0.45 * CombatTiming.FIGHT_TIMING_SCALE
 const DASH_IFRAME_START := 0.28
 const DASH_IFRAME_END := 0.72
 const RESPAWN_INVINCIBLE_DURATION := 1.0 * CombatTiming.FIGHT_TIMING_SCALE
+
+
+const ATTACK_CONTACT_NONE := 0
+const ATTACK_CONTACT_HIT := 1
+const ATTACK_CONTACT_BLOCK := 2
+
+#endregion
+
+
+#region Public state
 
 var current_state: State = State.IDLE
 var state_time: float = 0.0
@@ -90,7 +109,8 @@ var wakeup_roll_start_pos: Vector2 = Vector2.ZERO
 var wakeup_roll_target_pos: Vector2 = Vector2.ZERO
 var lethal_punish_throw: bool = false
 var stagger_meter: int = 0
-var _stagger_hit_serial_by_attacker: Dictionary = {}
+
+
 var combo_follow_up_buffered: AttackData
 var attack_hit_serial: int = 0
 var ledge_climb_start: Vector2 = Vector2.ZERO
@@ -100,12 +120,21 @@ var projectile_recovery_remaining: float = 0.0
 var projectile_startup_remaining: float = 0.0
 var projectile_pending_charge: float = 0.0
 var projectile_pending_low: bool = false
+
+#endregion
+
+
+#region Private state
+
+var _stagger_hit_serial_by_attacker: Dictionary = {}
+
+
 var _fighter: CharacterBody2D
 
-const ATTACK_CONTACT_NONE := 0
-const ATTACK_CONTACT_HIT := 1
-const ATTACK_CONTACT_BLOCK := 2
+#endregion
 
+
+#region Public API
 
 func setup(fighter: CharacterBody2D) -> void:
 	_fighter = fighter
@@ -701,12 +730,6 @@ func release_from_grab() -> void:
 	(_fighter as Fighter).resolve_standing_state()
 
 
-func _release_grab_victim() -> void:
-	if grab_victim != null:
-		grab_victim.release_from_grab()
-		grab_victim = null
-
-
 func start_dash(direction: int) -> void:
 	dash_direction = direction
 	dash_in_recovery = false
@@ -820,25 +843,6 @@ func update_attack_landing(was_on_floor: bool, is_on_floor: bool) -> void:
 	_apply_attack_landing_lag(attack)
 
 
-func _apply_attack_landing_lag(attack: AttackData) -> void:
-	var fighter := _fighter as Fighter
-	var lag_frames := attack.landing_lag_frames
-	if lag_frames < 0:
-		if not attack.id.begins_with("air_"):
-			return
-		lag_frames = fighter.stats.air_attack_landing_lag_frames
-	if lag_frames <= 0:
-		return
-
-	attack_landing_lag_applied = true
-	attack_landing_lag_time = CombatTiming.frames_to_seconds(lag_frames)
-	state_time = CombatTiming.frames_to_seconds(attack.startup_frames + attack.active_frames)
-	attack_recovery_frames = 0
-	fighter.set_hitbox_active(false)
-	if fighter.is_on_floor():
-		fighter.velocity.y = 0.0
-
-
 func update_stun_landing() -> void:
 	if current_state != State.STUN:
 		return
@@ -931,6 +935,180 @@ func begin_ledge_wakeup(option: WakeupOption) -> bool:
 	if not can_use_ledge_wakeup_options():
 		return false
 	return _begin_wakeup(option, true)
+
+
+func try_fast_get_up() -> bool:
+	return begin_knockdown_wakeup(WakeupOption.NEUTRAL)
+
+
+func enter_ledge_recovery(side: int) -> void:
+	ledge_side = side
+	pending_wakeup_followup = WakeupOption.NEUTRAL
+	wakeup_roll_from_ledge = false
+	change_state(State.LEDGE_RECOVERY)
+	var fighter := _fighter as Fighter
+	fighter.snap_to_ledge(side)
+	fighter.velocity = Vector2.ZERO
+
+
+func snap_wakeup_roll_to_ledge(side: int) -> void:
+	if current_state != State.WAKEUP_ROLL:
+		return
+	pending_wakeup_followup = WakeupOption.NEUTRAL
+	wakeup_roll_from_ledge = false
+	_fighter.velocity = Vector2.ZERO
+	enter_ledge_recovery(side)
+
+
+func try_ledge_get_up() -> bool:
+	return can_use_ledge_wakeup_options()
+
+
+func begin_ledge_get_up() -> bool:
+	return begin_ledge_wakeup(WakeupOption.NEUTRAL)
+
+
+func tick(delta: float) -> void:
+	if projectile_recovery_remaining > 0.0:
+		projectile_recovery_remaining = maxf(0.0, projectile_recovery_remaining - delta)
+
+	if oki_punish_time_left > 0.0:
+		oki_punish_time_left = maxf(0.0, oki_punish_time_left - delta)
+
+	if respawn_iframes_remaining > 0.0:
+		respawn_iframes_remaining = maxf(0.0, respawn_iframes_remaining - delta)
+
+	if current_state != State.PROJECTILE_CHARGE and projectile_startup_remaining > 0.0:
+		projectile_startup_remaining = 0.0
+
+	if attack_landing_lag_time > 0.0:
+		attack_landing_lag_time = maxf(0.0, attack_landing_lag_time - delta)
+	else:
+		state_time += delta
+	match current_state:
+		State.ATTACK, State.CROUCH, State.CROUCH_BLOCK:
+			if current_attack != null:
+				_tick_attack()
+		State.GRAB:
+			_tick_grab()
+		State.GRABBED:
+			pass
+		State.DASH:
+			if dash_in_recovery:
+				if state_time >= CombatTiming.scale_time((_fighter as Fighter).stats.dash_recovery_duration):
+					if (_fighter as Fighter).try_execute_action_queue():
+						return
+					(_fighter as Fighter).resolve_standing_state()
+			elif state_time >= get_dash_active_duration():
+				(_fighter as Fighter).finish_dash()
+				if try_start_buffered_dash_attack():
+					return
+				var recovery: float = CombatTiming.scale_time(
+					(_fighter as Fighter).stats.dash_recovery_duration
+				)
+				if recovery > 0.0:
+					dash_in_recovery = true
+					state_time = 0.0
+				else:
+					(_fighter as Fighter).resolve_standing_state()
+		State.KNOCKDOWN:
+			if knockdown_landed and get_knockdown_ground_time() >= KNOCKDOWN_GROUND_AUTO_GETUP_DELAY:
+				if has_buffered_prone_wakeup:
+					try_execute_buffered_prone_wakeup()
+				else:
+					_fighter.perform_fast_get_up()
+		State.STAGGER:
+			if state_time >= stagger_hitstun_duration:
+				reset_stagger_meter()
+				if (_fighter as Fighter).try_execute_action_queue():
+					return
+				(_fighter as Fighter).resolve_standing_state()
+		State.STUN:
+			if state_time >= CombatTiming.scale_time((_fighter as Fighter).stats.stun_hitstun_duration):
+				if (_fighter as Fighter).try_execute_action_queue():
+					return
+				(_fighter as Fighter).resolve_standing_state()
+		State.GETUP_INVINCIBLE:
+			if state_time >= getup_invincible_duration:
+				_complete_wakeup_transition()
+		State.SLOW_GETUP:
+			if state_time >= CombatTiming.scale_time((_fighter as Fighter).stats.slow_getup_duration):
+				_complete_wakeup_transition()
+		State.WAKEUP_ROLL:
+			if state_time >= get_wakeup_roll_duration():
+				_complete_wakeup_transition()
+		State.RESPAWN:
+			if not respawn_falling and respawn_iframes_remaining <= 0.0:
+				(_fighter as Fighter).resolve_standing_state()
+
+
+func update_ground_state(
+	is_moving: bool,
+	is_on_floor: bool,
+	is_guarding: bool,
+	is_crouching_input: bool
+) -> void:
+	if current_state == State.PROJECTILE_CHARGE:
+		return
+	if projectile_startup_remaining > 0.0:
+		return
+	if projectile_recovery_remaining > 0.0:
+		return
+	if current_attack != null:
+		return
+	if current_state == State.RESPAWN:
+		if respawn_falling:
+			return
+	elif current_state == State.LEDGE_RECOVERY:
+		return
+	elif current_state not in [State.IDLE, State.MOVE, State.BLOCK, State.CROUCH, State.CROUCH_BLOCK]:
+		return
+	if not is_on_floor:
+		if current_state in [State.IDLE, State.MOVE, State.BLOCK, State.CROUCH, State.CROUCH_BLOCK]:
+			var fighter := _fighter as Fighter
+			if not fighter.is_ledge_crouch_airborne() and not fighter.should_preserve_crouch_air_state():
+				change_state(State.IDLE)
+		return
+	if is_crouching_input:
+		if is_guarding:
+			change_state(State.CROUCH_BLOCK)
+		else:
+			change_state(State.CROUCH)
+	elif is_guarding:
+		change_state(State.BLOCK)
+	elif is_moving:
+		change_state(State.MOVE)
+	else:
+		change_state(State.IDLE)
+
+#endregion
+
+
+#region Private helpers
+
+func _release_grab_victim() -> void:
+	if grab_victim != null:
+		grab_victim.release_from_grab()
+		grab_victim = null
+
+
+func _apply_attack_landing_lag(attack: AttackData) -> void:
+	var fighter := _fighter as Fighter
+	var lag_frames := attack.landing_lag_frames
+	if lag_frames < 0:
+		if not attack.id.begins_with("air_"):
+			return
+		lag_frames = fighter.stats.air_attack_landing_lag_frames
+	if lag_frames <= 0:
+		return
+
+	attack_landing_lag_applied = true
+	attack_landing_lag_time = CombatTiming.frames_to_seconds(lag_frames)
+	state_time = CombatTiming.frames_to_seconds(attack.startup_frames + attack.active_frames)
+	attack_recovery_frames = 0
+	fighter.set_hitbox_active(false)
+	if fighter.is_on_floor():
+		fighter.velocity.y = 0.0
 
 
 func _begin_wakeup(option: WakeupOption, from_ledge: bool) -> bool:
@@ -1073,111 +1251,6 @@ func _complete_wakeup_transition() -> void:
 			fighter.resolve_standing_state()
 
 
-func try_fast_get_up() -> bool:
-	return begin_knockdown_wakeup(WakeupOption.NEUTRAL)
-
-
-func enter_ledge_recovery(side: int) -> void:
-	ledge_side = side
-	pending_wakeup_followup = WakeupOption.NEUTRAL
-	wakeup_roll_from_ledge = false
-	change_state(State.LEDGE_RECOVERY)
-	var fighter := _fighter as Fighter
-	fighter.snap_to_ledge(side)
-	fighter.velocity = Vector2.ZERO
-
-
-func snap_wakeup_roll_to_ledge(side: int) -> void:
-	if current_state != State.WAKEUP_ROLL:
-		return
-	pending_wakeup_followup = WakeupOption.NEUTRAL
-	wakeup_roll_from_ledge = false
-	_fighter.velocity = Vector2.ZERO
-	enter_ledge_recovery(side)
-
-
-func try_ledge_get_up() -> bool:
-	return can_use_ledge_wakeup_options()
-
-
-func begin_ledge_get_up() -> bool:
-	return begin_ledge_wakeup(WakeupOption.NEUTRAL)
-
-
-func tick(delta: float) -> void:
-	if projectile_recovery_remaining > 0.0:
-		projectile_recovery_remaining = maxf(0.0, projectile_recovery_remaining - delta)
-
-	if oki_punish_time_left > 0.0:
-		oki_punish_time_left = maxf(0.0, oki_punish_time_left - delta)
-
-	if respawn_iframes_remaining > 0.0:
-		respawn_iframes_remaining = maxf(0.0, respawn_iframes_remaining - delta)
-
-	if current_state != State.PROJECTILE_CHARGE and projectile_startup_remaining > 0.0:
-		projectile_startup_remaining = 0.0
-
-	if attack_landing_lag_time > 0.0:
-		attack_landing_lag_time = maxf(0.0, attack_landing_lag_time - delta)
-	else:
-		state_time += delta
-	match current_state:
-		State.ATTACK, State.CROUCH, State.CROUCH_BLOCK:
-			if current_attack != null:
-				_tick_attack()
-		State.GRAB:
-			_tick_grab()
-		State.GRABBED:
-			pass
-		State.DASH:
-			if dash_in_recovery:
-				if state_time >= CombatTiming.scale_time((_fighter as Fighter).stats.dash_recovery_duration):
-					if (_fighter as Fighter).try_execute_action_queue():
-						return
-					(_fighter as Fighter).resolve_standing_state()
-			elif state_time >= get_dash_active_duration():
-				(_fighter as Fighter).finish_dash()
-				if try_start_buffered_dash_attack():
-					return
-				var recovery: float = CombatTiming.scale_time(
-					(_fighter as Fighter).stats.dash_recovery_duration
-				)
-				if recovery > 0.0:
-					dash_in_recovery = true
-					state_time = 0.0
-				else:
-					(_fighter as Fighter).resolve_standing_state()
-		State.KNOCKDOWN:
-			if knockdown_landed and get_knockdown_ground_time() >= KNOCKDOWN_GROUND_AUTO_GETUP_DELAY:
-				if has_buffered_prone_wakeup:
-					try_execute_buffered_prone_wakeup()
-				else:
-					_fighter.perform_fast_get_up()
-		State.STAGGER:
-			if state_time >= stagger_hitstun_duration:
-				reset_stagger_meter()
-				if (_fighter as Fighter).try_execute_action_queue():
-					return
-				(_fighter as Fighter).resolve_standing_state()
-		State.STUN:
-			if state_time >= CombatTiming.scale_time((_fighter as Fighter).stats.stun_hitstun_duration):
-				if (_fighter as Fighter).try_execute_action_queue():
-					return
-				(_fighter as Fighter).resolve_standing_state()
-		State.GETUP_INVINCIBLE:
-			if state_time >= getup_invincible_duration:
-				_complete_wakeup_transition()
-		State.SLOW_GETUP:
-			if state_time >= CombatTiming.scale_time((_fighter as Fighter).stats.slow_getup_duration):
-				_complete_wakeup_transition()
-		State.WAKEUP_ROLL:
-			if state_time >= get_wakeup_roll_duration():
-				_complete_wakeup_transition()
-		State.RESPAWN:
-			if not respawn_falling and respawn_iframes_remaining <= 0.0:
-				(_fighter as Fighter).resolve_standing_state()
-
-
 func _get_attack_max_frames(attack: AttackData) -> int:
 	return (
 		attack.startup_frames
@@ -1293,42 +1366,4 @@ func _tick_grab() -> void:
 	else:
 		(_fighter as Fighter).set_grabbox_active(false)
 
-
-func update_ground_state(
-	is_moving: bool,
-	is_on_floor: bool,
-	is_guarding: bool,
-	is_crouching_input: bool
-) -> void:
-	if current_state == State.PROJECTILE_CHARGE:
-		return
-	if projectile_startup_remaining > 0.0:
-		return
-	if projectile_recovery_remaining > 0.0:
-		return
-	if current_attack != null:
-		return
-	if current_state == State.RESPAWN:
-		if respawn_falling:
-			return
-	elif current_state == State.LEDGE_RECOVERY:
-		return
-	elif current_state not in [State.IDLE, State.MOVE, State.BLOCK, State.CROUCH, State.CROUCH_BLOCK]:
-		return
-	if not is_on_floor:
-		if current_state in [State.IDLE, State.MOVE, State.BLOCK, State.CROUCH, State.CROUCH_BLOCK]:
-			var fighter := _fighter as Fighter
-			if not fighter.is_ledge_crouch_airborne() and not fighter.should_preserve_crouch_air_state():
-				change_state(State.IDLE)
-		return
-	if is_crouching_input:
-		if is_guarding:
-			change_state(State.CROUCH_BLOCK)
-		else:
-			change_state(State.CROUCH)
-	elif is_guarding:
-		change_state(State.BLOCK)
-	elif is_moving:
-		change_state(State.MOVE)
-	else:
-		change_state(State.IDLE)
+#endregion

@@ -10,6 +10,10 @@ class_name MimicProjectileConfig
 ## Downward acceleration applied to the lob each second (px/s²). Controls arc snappiness.
 @export var gravity: float = 900.0
 
+## Knockback the coin applies on hit; overrides the inherited base ProjectileConfig
+## knockback for Mimic only.
+@export var knockback_strength: float = 175.0
+
 ## Base arc peak height in px, before charge scaling.
 @export var arc_base_height: float = 150.0
 
@@ -50,7 +54,7 @@ class_name MimicProjectileConfig
 ## Seconds to fade the toppled coin to invisible before it despawns.
 @export var fade_out_seconds: float = 0.25
 
-## Optional fine-tune nudge (px) added on top of the automatic sprite-bottom snap.
+## Fine-tune nudge added on top of the automatic sprite-bottom snap.
 ## Positive lifts the coin, negative sinks it. Leave at 0 unless the snap looks off.
 @export var ground_rest_nudge: float = 0.0
 

@@ -1,11 +1,24 @@
 extends Node2D
 
+
+#region Constants
+
 const FIGHTER_SCENE := preload("res://scenes/fight/fighter.tscn")
+
+#endregion
+
+
+#region Exports
 
 @export var stage_profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
 @export var player_stats: FighterStats = preload("res://scripts/characters/knight_fighter_stats.tres")
 @export var opponent_stats: FighterStats = preload("res://scripts/characters/minotaur_fighter_stats.tres")
 @export var debug_hitboxes: bool = true
+
+#endregion
+
+
+#region Onready
 
 @onready var fight_manager: FightManager = $FightManager
 @onready var match_hud: CanvasLayer = $MatchHUD
@@ -13,6 +26,11 @@ const FIGHTER_SCENE := preload("res://scenes/fight/fighter.tscn")
 @onready var player_spawn: Marker2D = $PlayerSpawn
 @onready var opponent_spawn: Marker2D = $OpponentSpawn
 @onready var stage_geometry: StageGeometry = $Platform
+
+#endregion
+
+
+#region Private state
 
 var _player: Fighter
 var _opponent: Fighter
@@ -22,6 +40,10 @@ var _opponent: Fighter
 static var _selected_player_stats: FighterStats
 static var _selected_opponent_stats: FighterStats
 
+#endregion
+
+
+#region Lifecycle
 
 func _ready() -> void:
 	if _selected_player_stats != null:
@@ -58,6 +80,18 @@ func _ready() -> void:
 	_set_debug_visibility(debug_hitboxes)
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("toggle_debug"):
+		debug_hitboxes = not debug_hitboxes
+		_set_debug_visibility(debug_hitboxes)
+	if event.is_action_pressed("debug_knockdown"):
+		_debug_knockdown_player()
+
+#endregion
+
+
+#region Private helpers
+
 func _spawn_position_from_marker(marker: Marker2D) -> Vector2:
 	var x := marker.global_position.x
 	return Vector2(x, stage_profile.get_ground_y(x))
@@ -72,14 +106,6 @@ func _spawn_fighter(spawn_position: Vector2, color: Color, is_player: bool) -> F
 	fighter.stats = player_stats if is_player else opponent_stats
 	add_child(fighter)
 	return fighter
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_debug"):
-		debug_hitboxes = not debug_hitboxes
-		_set_debug_visibility(debug_hitboxes)
-	if event.is_action_pressed("debug_knockdown"):
-		_debug_knockdown_player()
 
 
 func _debug_knockdown_player() -> void:
@@ -142,3 +168,5 @@ func _reload_with_characters() -> void:
 
 func _restart_match() -> void:
 	get_tree().reload_current_scene()
+
+#endregion

@@ -1,12 +1,30 @@
 extends Area2D
 class_name FightGrabbox
 
+
+#region Signals
+
 signal grab_landed(victim: CharacterBody2D, grab_data: Resource)
+
+#endregion
+
+
+#region Public state
 
 var owner_fighter: CharacterBody2D
 var grab_data: Resource
+
+#endregion
+
+
+#region Private state
+
 var _grabbed_victims: Dictionary = {}
 
+#endregion
+
+
+#region Public API
 
 func setup(owner_body: CharacterBody2D) -> void:
 	owner_fighter = owner_body
@@ -33,6 +51,10 @@ func deactivate() -> void:
 	set_deferred("monitoring", false)
 	grab_data = null
 
+#endregion
+
+
+#region Private helpers
 
 func _on_area_entered(area: Area2D) -> void:
 	if grab_data == null or owner_fighter == null:
@@ -46,3 +68,5 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 	_grabbed_victims[victim.get_instance_id()] = true
 	grab_landed.emit(victim, grab_data)
+
+#endregion

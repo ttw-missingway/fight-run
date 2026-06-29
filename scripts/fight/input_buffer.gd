@@ -1,6 +1,9 @@
 extends RefCounted
 class_name FightInputBuffer
 
+
+#region Enums
+
 enum Intent {
 	NONE = -1,
 	JUMP,
@@ -11,6 +14,11 @@ enum Intent {
 	CROUCH,
 	DASH,
 }
+
+#endregion
+
+
+#region Constants
 
 const BUFFER_FRAMES := 5
 const MAX_QUEUE_SIZE := 6
@@ -38,9 +46,18 @@ const INTENT_LABELS := {
 	Intent.DASH: "Dash",
 }
 
+#endregion
+
+
+#region Private state
+
 var _ages: Dictionary = {}
 var _queue: Array[Dictionary] = []
 
+#endregion
+
+
+#region Public API
 
 func reset() -> void:
 	_ages.clear()
@@ -131,17 +148,6 @@ func enqueue_dash(direction: int) -> void:
 	_enqueue(Intent.DASH, {"dash_direction": direction})
 
 
-func _enqueue(intent: Intent, data: Dictionary = {}) -> void:
-	for entry in _queue:
-		if entry["intent"] == intent:
-			entry["age"] = 0
-			entry["data"] = data.duplicate()
-			return
-	_queue.append({"intent": intent, "age": 0, "data": data.duplicate()})
-	while _queue.size() > MAX_QUEUE_SIZE:
-		_queue.pop_front()
-
-
 func peek_entry() -> Dictionary:
 	if _queue.is_empty():
 		return {}
@@ -191,10 +197,6 @@ func get_queue_display_text() -> String:
 	return " → ".join(parts)
 
 
-func _mark_pressed(action: String) -> void:
-	_ages[action] = 0
-
-
 func is_recent(action: String, max_age: int = -1) -> bool:
 	if max_age < 0:
 		max_age = BUFFER_FRAMES
@@ -225,3 +227,24 @@ func remove_intent(intent: Intent) -> void:
 
 func attack_pressed_for_combo() -> bool:
 	return Input.is_action_just_pressed("attack") or is_recent("attack")
+
+#endregion
+
+
+#region Private helpers
+
+func _enqueue(intent: Intent, data: Dictionary = {}) -> void:
+	for entry in _queue:
+		if entry["intent"] == intent:
+			entry["age"] = 0
+			entry["data"] = data.duplicate()
+			return
+	_queue.append({"intent": intent, "age": 0, "data": data.duplicate()})
+	while _queue.size() > MAX_QUEUE_SIZE:
+		_queue.pop_front()
+
+
+func _mark_pressed(action: String) -> void:
+	_ages[action] = 0
+
+#endregion

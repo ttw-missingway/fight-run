@@ -2,6 +2,8 @@ class_name FighterStats
 extends Resource
 
 
+#region Exports
+
 ## The character's visual rig: a Node2D scene with an AnimatedSprite2D and the
 ## CharacterAnimator script. Instanced under the Fighter's FacingPivot at spawn.
 ## Leave null to fall back to the placeholder BodyRect.
@@ -53,3 +55,5 @@ extends Resource
 @export var dash_attack: AttackData
 @export var grab_data: GrabData
 @export var wakeup_attack: AttackData
+
+#endregion

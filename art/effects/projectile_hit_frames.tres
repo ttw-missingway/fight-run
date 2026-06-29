@@ -1,0 +1,32 @@
+[gd_resource type="SpriteFrames" format=3 uid="uid://dsdt5u0i6y26s"]
+
+[ext_resource type="Texture2D" uid="uid://ce8k1gkcvoi3" path="res://art/effects/_Projectile_Hit.png" id="1_xa1nl"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_m5o8c"]
+atlas = ExtResource("1_xa1nl")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tg28x"]
+atlas = ExtResource("1_xa1nl")
+region = Rect2(32, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_qlnrp"]
+atlas = ExtResource("1_xa1nl")
+region = Rect2(64, 0, 32, 32)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_m5o8c")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_tg28x")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_qlnrp")
+}],
+"loop": false,
+"name": &"hit",
+"speed": 18.0
+}]

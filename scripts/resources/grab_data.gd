@@ -1,6 +1,9 @@
 extends Resource
 class_name GrabData
 
+
+#region Exports
+
 @export var id: String = "throw"
 @export var startup_frames: int = 12
 @export var active_frames: int = 4
@@ -11,3 +14,5 @@ class_name GrabData
 @export var throw_knockback: float = 450.0
 @export var grab_advance_speed: float = 0.0
 @export var grab_hold_offset: float = 24.0
+
+#endregion

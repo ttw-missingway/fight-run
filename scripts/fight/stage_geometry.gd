@@ -1,16 +1,37 @@
 extends StaticBody2D
 class_name StageGeometry
 
+
+#region Exports
+
 @export var profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
+
+#endregion
+
+
+#region Onready
 
 @onready var _stage_fill: Polygon2D = $StageFill
 
+#endregion
+
+
+#region Private state
+
 var _collision_nodes: Array[CollisionShape2D] = []
 
+#endregion
+
+
+#region Lifecycle
 
 func _ready() -> void:
 	apply_profile(profile)
 
+#endregion
+
+
+#region Public API
 
 func apply_profile(next_profile: StageProfile) -> void:
 	profile = next_profile
@@ -30,9 +51,15 @@ func apply_profile(next_profile: StageProfile) -> void:
 		_stage_fill.polygon = profile.get_visual_polygon()
 		_stage_fill.color = Color(0.25, 0.28, 0.32, 1.0)
 
+#endregion
+
+
+#region Private helpers
 
 func _clear_collision_nodes() -> void:
 	for node in _collision_nodes:
 		if is_instance_valid(node):
 			node.queue_free()
 	_collision_nodes.clear()
+
+#endregion

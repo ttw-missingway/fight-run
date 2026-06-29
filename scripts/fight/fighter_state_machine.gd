@@ -1,6 +1,9 @@
 extends Node
 class_name FighterStateMachine
 
+## Per-fighter combat state machine: tracks the active state (attacks, grabs, dashes,
+## hitstun, knockdown, wakeup, projectiles, respawn) and drives its timed transitions.
+
 
 #region Enums
 
@@ -136,14 +139,17 @@ var _fighter: CharacterBody2D
 
 #region Public API
 
+## Binds the owning fighter; call once before any other use.
 func setup(fighter: CharacterBody2D) -> void:
 	_fighter = fighter
 
 
+## Returns the current State's enum key as a string, for debug and animation lookup.
 func get_state_name() -> String:
 	return State.keys()[current_state]
 
 
+## True when in a neutral state that can start a brand-new action this frame.
 func can_accept_input() -> bool:
 	if projectile_recovery_remaining > 0.0:
 		return false
@@ -163,6 +169,7 @@ func can_accept_input() -> bool:
 	]
 
 
+## True when an input can be queued now to fire as soon as the current action ends.
 func can_buffer_inputs() -> bool:
 	if not is_active_in_match():
 		return false
@@ -183,30 +190,37 @@ func can_buffer_inputs() -> bool:
 	return false
 
 
+## True while crouching or crouch-blocking.
 func is_crouching() -> bool:
 	return current_state in [State.CROUCH, State.CROUCH_BLOCK]
 
 
+## True only while plain crouching (not crouch-block), where the low profile applies.
 func is_crouch_low_profiling() -> bool:
 	return current_state == State.CROUCH
 
 
+## True while hanging in ledge recovery.
 func is_on_ledge() -> bool:
 	return current_state == State.LEDGE_RECOVERY
 
 
+## True while in the knockdown state, whether falling or grounded.
 func is_knocked_down() -> bool:
 	return current_state == State.KNOCKDOWN
 
 
+## True while in stagger or stun hitstun.
 func is_in_hitstun() -> bool:
 	return current_state in [State.STAGGER, State.STUN]
 
 
+## True while in the heavier stun state.
 func is_stunned() -> bool:
 	return current_state == State.STUN
 
 
+## True when the current attack has a combo follow-up that can be buffered.
 func can_buffer_combo() -> bool:
 	if current_attack == null:
 		return false
@@ -214,28 +228,34 @@ func can_buffer_combo() -> bool:
 	return attack.combo_follow_up != null
 
 
+## Buffers the current attack's combo follow-up, if it has one.
 func buffer_combo_follow_up() -> void:
 	if not can_buffer_combo():
 		return
 	combo_follow_up_buffered = (current_attack as AttackData).combo_follow_up
 
 
+## Returns and clears the buffered combo follow-up (null if none).
 func consume_combo_follow_up() -> AttackData:
 	var next := combo_follow_up_buffered
 	combo_follow_up_buffered = null
 	return next
 
 
+## Drops any buffered combo follow-up.
 func clear_combo_buffer() -> void:
 	combo_follow_up_buffered = null
 
 
+## Zeroes the stagger meter, clears per-attacker hit tracking, and refreshes its display.
 func reset_stagger_meter() -> void:
 	stagger_meter = 0
 	_stagger_hit_serial_by_attacker.clear()
 	(_fighter as Fighter)._update_stagger_meter_display()
 
 
+## Adds a stagger hit (ignoring a duplicate from the same attack); returns true if it
+## crossed the knockdown threshold, otherwise enters stagger and returns false.
 func apply_stagger_hit(
 	attacker: Fighter,
 	stagger_value: int,
@@ -260,6 +280,7 @@ func apply_stagger_hit(
 	return false
 
 
+## Like apply_stagger_hit but staggers with an added vertical launch on the non-knockdown path.
 func apply_stagger_hit_with_launch(
 	attacker: Fighter,
 	stagger_value: int,
@@ -285,28 +306,34 @@ func apply_stagger_hit_with_launch(
 	return false
 
 
+## True when the fighter is in a state that can keep holding guard.
 func can_hold_guard() -> bool:
 	if current_state == State.RESPAWN and not respawn_falling:
 		return true
 	return current_state in [State.IDLE, State.MOVE, State.BLOCK, State.CROUCH, State.CROUCH_BLOCK]
 
 
+## True while blocking, standing or crouching.
 func is_blocking() -> bool:
 	return current_state in [State.BLOCK, State.CROUCH_BLOCK]
 
 
+## True while in the grab state.
 func is_grabbing() -> bool:
 	return current_state == State.GRAB
 
 
+## True while actively holding a grabbed victim.
 func is_holding_grab() -> bool:
 	return current_state == State.GRAB and grab_landed and grab_victim != null
 
 
+## True while being held in an opponent's grab.
 func is_grabbed() -> bool:
 	return current_state == State.GRABBED
 
 
+## True while the current attack is in its active (hitting) frames.
 func is_attack_active() -> bool:
 	if current_attack == null:
 		return false
@@ -319,28 +346,34 @@ func is_attack_active() -> bool:
 	)
 
 
+## True while attacking and not yet in landing lag.
 func is_attacking() -> bool:
 	return current_state == State.ATTACK and current_attack != null and attack_landing_lag_time <= 0.0
 
 
+## True while serving an attack's landing lag.
 func is_attack_in_landing_lag() -> bool:
 	return attack_landing_lag_time > 0.0
 
 
+## True while knocked down but not yet landed.
 func is_knockdown_falling() -> bool:
 	return current_state == State.KNOCKDOWN and not knockdown_landed
 
 
+## True while still falling from a knockdown that began airborne.
 func is_air_knockdown_falling() -> bool:
 	return is_knockdown_falling() and knockdown_started_in_air
 
 
+## 0..1 progress through the knockdown fall (1 once landed).
 func get_knockdown_fall_progress() -> float:
 	if knockdown_landed:
 		return 1.0
 	return clampf(state_time / KNOCKDOWN_FALL_DURATION, 0.0, 1.0)
 
 
+## 0..1 progress through the current get-up (1 if not getting up).
 func get_getup_progress() -> float:
 	if current_state == State.GETUP_INVINCIBLE:
 		if getup_invincible_duration <= 0.0:
@@ -354,6 +387,7 @@ func get_getup_progress() -> float:
 	return 1.0
 
 
+## Wakeup-roll duration from stats, or the default constant when unset.
 func get_wakeup_roll_duration() -> float:
 	var duration := CombatTiming.scale_time((_fighter as Fighter).stats.wakeup_roll_duration)
 	if duration > 0.0:
@@ -361,6 +395,7 @@ func get_wakeup_roll_duration() -> float:
 	return WAKEUP_ROLL_DURATION
 
 
+## 0..1 progress through the wakeup roll (1 if not rolling).
 func get_wakeup_roll_progress() -> float:
 	if current_state != State.WAKEUP_ROLL:
 		return 1.0
@@ -370,14 +405,17 @@ func get_wakeup_roll_progress() -> float:
 	return clampf(state_time / duration, 0.0, 1.0)
 
 
+## True during either get-up state.
 func is_getting_up() -> bool:
 	return current_state in [State.GETUP_INVINCIBLE, State.SLOW_GETUP]
 
 
+## True during a wakeup roll.
 func is_wakeup_rolling() -> bool:
 	return current_state == State.WAKEUP_ROLL
 
 
+## True while the active frames of a wakeup-reversal attack grant invincibility.
 func is_wakeup_attack_invincible() -> bool:
 	if current_attack == null:
 		return false
@@ -387,14 +425,17 @@ func is_wakeup_attack_invincible() -> bool:
 	return is_attack_active()
 
 
+## Opens the okizeme punish window after a wakeup.
 func begin_oki_punish_window() -> void:
 	oki_punish_time_left = PUNISH_WINDOW_DURATION
 
 
+## Closes the okizeme punish window.
 func clear_oki_punish_window() -> void:
 	oki_punish_time_left = 0.0
 
 
+## True while knockdown invincibility applies (still falling, or within the grounded grace).
 func is_knockdown_invincible() -> bool:
 	if current_state != State.KNOCKDOWN:
 		return false
@@ -403,12 +444,14 @@ func is_knockdown_invincible() -> bool:
 	return (state_time - knockdown_landed_at) < KNOCKDOWN_GROUND_INVINCIBLE_DURATION
 
 
+## Seconds spent grounded in knockdown (0 until landed).
 func get_knockdown_ground_time() -> float:
 	if not knockdown_landed:
 		return 0.0
 	return state_time - knockdown_landed_at
 
 
+## True while pinned to the ground early in knockdown, before wakeup is allowed.
 func is_knockdown_forced_ground() -> bool:
 	return (
 		current_state == State.KNOCKDOWN
@@ -417,10 +460,12 @@ func is_knockdown_forced_ground() -> bool:
 	)
 
 
+## True when a wakeup can be performed from the grounded knockdown right now.
 func can_execute_prone_wakeup() -> bool:
 	return can_use_knockdown_wakeup_options() and not is_knockdown_forced_ground()
 
 
+## Buffers a wakeup option to fire when allowed; returns false if one is already buffered.
 func buffer_prone_wakeup(option: WakeupOption) -> bool:
 	if has_buffered_prone_wakeup:
 		return false
@@ -429,6 +474,7 @@ func buffer_prone_wakeup(option: WakeupOption) -> bool:
 	return true
 
 
+## Fires a buffered prone wakeup if one is queued and now allowed; returns whether it started.
 func try_execute_buffered_prone_wakeup() -> bool:
 	if not can_execute_prone_wakeup():
 		return false
@@ -439,6 +485,7 @@ func try_execute_buffered_prone_wakeup() -> bool:
 	return _begin_wakeup(option, false)
 
 
+## True during the dash's mid-window invincibility frames.
 func is_dash_invincible() -> bool:
 	if current_state != State.DASH or dash_in_recovery:
 		return false
@@ -449,10 +496,12 @@ func is_dash_invincible() -> bool:
 	return progress >= DASH_IFRAME_START and progress <= DASH_IFRAME_END
 
 
+## True during dash recovery, when the dash can be punished.
 func is_dash_vulnerable() -> bool:
 	return current_state == State.DASH and dash_in_recovery
 
 
+## Active dash duration from stats, shorter on the ground than airborne.
 func get_dash_active_duration() -> float:
 	var fighter := _fighter as Fighter
 	if fighter.is_on_floor():
@@ -460,12 +509,14 @@ func get_dash_active_duration() -> float:
 	return CombatTiming.scale_time(fighter.stats.dash_duration)
 
 
+## True while respawn invincibility (falling or post-land iframes) applies.
 func is_respawn_invincible() -> bool:
 	if current_state == State.RESPAWN:
 		return respawn_falling or respawn_iframes_remaining > 0.0
 	return respawn_iframes_remaining > 0.0
 
 
+## True when any source of invincibility is currently active.
 func is_invincible() -> bool:
 	return current_state in [
 		State.GETUP_INVINCIBLE,
@@ -474,12 +525,14 @@ func is_invincible() -> bool:
 	] or is_knockdown_invincible() or is_dash_invincible() or is_respawn_invincible() or is_slow_getup_invincible() or is_wakeup_attack_invincible()
 
 
+## True during the invincible early window of a slow get-up.
 func is_slow_getup_invincible() -> bool:
 	if current_state != State.SLOW_GETUP:
 		return false
 	return state_time < CombatTiming.scale_time((_fighter as Fighter).stats.slow_getup_invincible_duration)
 
 
+## True when the fighter can be punished (punish window, dash recovery, or exposed grounded knockdown).
 func is_vulnerable() -> bool:
 	if is_in_punish_window():
 		return true
@@ -488,18 +541,23 @@ func is_vulnerable() -> bool:
 	return is_knocked_down() and knockdown_landed and not is_knockdown_invincible()
 
 
+## True while the okizeme punish window is open.
 func is_in_punish_window() -> bool:
 	return oki_punish_time_left > 0.0
 
 
+## True unless dead.
 func is_active_in_match() -> bool:
 	return current_state != State.DEAD
 
 
+## True when falling off the stage should be lethal (not while dead, respawning, or on a ledge).
 func can_die_from_fall_off_stage() -> bool:
 	return current_state not in [State.DEAD, State.RESPAWN, State.LEDGE_RECOVERY]
 
 
+## Transitions to next_state, tearing down attack/grab/dash/charge bookkeeping for the
+## state being left and notifying the fighter.
 func change_state(next_state: State) -> void:
 	if current_state == next_state:
 		return
@@ -538,6 +596,7 @@ func change_state(next_state: State) -> void:
 	_fighter.on_state_changed(next_state)
 
 
+## Starts an attack, resetting attack bookkeeping; keeps the crouch state for crouch-preserving attacks.
 func start_attack(attack_data: Resource) -> void:
 	attack_hit_serial += 1
 	current_attack = attack_data
@@ -566,6 +625,7 @@ func start_attack(attack_data: Resource) -> void:
 	change_state(State.ATTACK)
 
 
+## True when a projectile can be started now (alive, off-ledge, has a config, and accepting input).
 func can_use_projectile() -> bool:
 	if not is_active_in_match():
 		return false
@@ -577,6 +637,7 @@ func can_use_projectile() -> bool:
 	return can_accept_input()
 
 
+## Enters the projectile charge state, optionally aiming low.
 func begin_projectile_charge(low_angle: bool = false) -> void:
 	projectile_charge_time = 0.0
 	projectile_startup_remaining = 0.0
@@ -584,6 +645,7 @@ func begin_projectile_charge(low_angle: bool = false) -> void:
 	change_state(State.PROJECTILE_CHARGE)
 
 
+## Advances projectile startup then charge time while charging; call each frame.
 func tick_projectile_charge(delta: float) -> void:
 	if current_state != State.PROJECTILE_CHARGE:
 		return
@@ -595,6 +657,7 @@ func tick_projectile_charge(delta: float) -> void:
 	projectile_charge_time += delta
 
 
+## Logarithmic damage charge ratio for the time held (0 if no config).
 func get_projectile_charge_ratio() -> float:
 	var config := (_fighter as Fighter).stats.projectile_config
 	if config == null:
@@ -613,6 +676,7 @@ func get_projectile_charge_time_fraction() -> float:
 	return clampf(projectile_charge_time / scaled_max, 0.0, 1.0)
 
 
+## True once charge time has reached the configured maximum.
 func is_projectile_fully_charged() -> bool:
 	var config := (_fighter as Fighter).stats.projectile_config
 	if config == null:
@@ -620,6 +684,7 @@ func is_projectile_fully_charged() -> bool:
 	return projectile_charge_time >= CombatTiming.scale_time(config.max_charge_time)
 
 
+## True once charging has begun accumulating, so the charge can no longer be cancelled freely.
 func is_projectile_committed() -> bool:
 	return (
 		current_state == State.PROJECTILE_CHARGE
@@ -630,6 +695,7 @@ func is_projectile_committed() -> bool:
 	)
 
 
+## Locks in the charge ratio and begins startup before the shot fires.
 func begin_projectile_release(charge_ratio: float) -> void:
 	projectile_pending_charge = clampf(charge_ratio, 0.0, 1.0)
 	projectile_charge_time = 0.0
@@ -641,10 +707,12 @@ func begin_projectile_release(charge_ratio: float) -> void:
 		(_fighter as Fighter).complete_projectile_startup()
 
 
+## True if the pending shot is aimed low.
 func is_projectile_low_angle() -> bool:
 	return projectile_pending_low
 
 
+## Completes startup: clears the pending charge, applies recovery, and returns to standing.
 func finish_projectile_startup() -> void:
 	projectile_pending_charge = 0.0
 	projectile_pending_low = false
@@ -654,6 +722,7 @@ func finish_projectile_startup() -> void:
 	(_fighter as Fighter).resolve_standing_state()
 
 
+## Marks the current attack as having hit; buffers its auto-combo follow-up on an airborne juggle.
 func register_attack_hit(victim: Fighter = null) -> void:
 	if current_attack == null:
 		return
@@ -670,6 +739,7 @@ func register_attack_hit(victim: Fighter = null) -> void:
 		combo_follow_up_buffered = attack.combo_follow_up
 
 
+## Marks the current attack as blocked, unless it has already registered a hit.
 func register_attack_blocked() -> void:
 	if current_attack == null:
 		return
@@ -677,6 +747,7 @@ func register_attack_blocked() -> void:
 		attack_contact = ATTACK_CONTACT_BLOCK
 
 
+## Starts a grab attempt with the given grab data.
 func start_grab(grab_data: Resource) -> void:
 	current_grab = grab_data
 	grab_landed = false
@@ -686,6 +757,7 @@ func start_grab(grab_data: Resource) -> void:
 	change_state(State.GRAB)
 
 
+## Latches onto a grabbed victim and restarts the state timer for the hold.
 func begin_grab_hold(victim: Fighter) -> void:
 	if current_grab == null:
 		return
@@ -696,6 +768,7 @@ func begin_grab_hold(victim: Fighter) -> void:
 	state_time = 0.0
 
 
+## Throws the held victim in the given direction and enters grab recovery.
 func execute_throw_release(throw_direction: int) -> void:
 	if current_grab == null or grab_victim == null:
 		return
@@ -710,10 +783,12 @@ func execute_throw_release(throw_direction: int) -> void:
 	state_time = CombatTiming.frames_to_seconds(grab_data.startup_frames + grab_data.active_frames)
 
 
+## Releases the currently held victim.
 func release_held_grab() -> void:
 	_release_grab_victim()
 
 
+## Enters the grabbed state under thrower; records whether the throw lands as a lethal punish.
 func enter_grabbed(thrower: Fighter, grab_data: Resource) -> void:
 	grabbed_by = thrower
 	current_grab = grab_data
@@ -721,6 +796,7 @@ func enter_grabbed(thrower: Fighter, grab_data: Resource) -> void:
 	change_state(State.GRABBED)
 
 
+## Leaves the grabbed state and returns to standing.
 func release_from_grab() -> void:
 	if current_state != State.GRABBED:
 		return
@@ -730,6 +806,7 @@ func release_from_grab() -> void:
 	(_fighter as Fighter).resolve_standing_state()
 
 
+## Starts a dash in the given direction.
 func start_dash(direction: int) -> void:
 	dash_direction = direction
 	dash_in_recovery = false
@@ -737,12 +814,14 @@ func start_dash(direction: int) -> void:
 	change_state(State.DASH)
 
 
+## Buffers a dash-attack during the dash's active window.
 func buffer_dash_attack() -> void:
 	if current_state != State.DASH or dash_in_recovery:
 		return
 	dash_attack_buffered = true
 
 
+## Starts a buffered dash-attack if grounded, facing the dash direction; returns whether it fired.
 func try_start_buffered_dash_attack() -> bool:
 	if not dash_attack_buffered:
 		return false
@@ -757,6 +836,7 @@ func try_start_buffered_dash_attack() -> bool:
 	return true
 
 
+## Launches into knockdown with the given impulse, resetting knockdown bookkeeping and lie direction.
 func begin_knockdown_impulse(
 	impulse: Vector2,
 	from_throw: bool = false,
@@ -781,6 +861,7 @@ func begin_knockdown_impulse(
 	_fighter.velocity = impulse
 
 
+## Enters (or refreshes) stagger hitstun with the given knockback and optional duration and vertical launch.
 func enter_stagger(
 	horizontal_kb: float,
 	hitstun_seconds: float = -1.0,
@@ -806,12 +887,14 @@ func enter_stagger(
 			fighter.velocity.y = vertical_kb
 
 
+## 0..1 progress through stagger hitstun (1 if not staggering).
 func get_stagger_hitstun_progress() -> float:
 	if current_state != State.STAGGER or stagger_hitstun_duration <= 0.0:
 		return 1.0
 	return clampf(state_time / stagger_hitstun_duration, 0.0, 1.0)
 
 
+## Enters the heavier stun state with knockback, optionally spiking an airborne victim downward.
 func enter_stun(horizontal_kb: float, spike_in_air: bool) -> void:
 	reset_stagger_meter()
 	hitstun_velocity_x = horizontal_kb
@@ -827,6 +910,7 @@ func enter_stun(horizontal_kb: float, spike_in_air: bool) -> void:
 			fighter.velocity.y = maxf(fighter.velocity.y, fighter.stats.stun_air_spike_velocity)
 
 
+## On landing during an attack's active frames, applies that attack's landing lag. Call on floor-state changes.
 func update_attack_landing(was_on_floor: bool, is_on_floor: bool) -> void:
 	if current_attack == null or attack_landing_lag_applied:
 		return
@@ -843,6 +927,7 @@ func update_attack_landing(was_on_floor: bool, is_on_floor: bool) -> void:
 	_apply_attack_landing_lag(attack)
 
 
+## Tracks airborne stun and zeroes downward velocity on landing; call each frame while stunned.
 func update_stun_landing() -> void:
 	if current_state != State.STUN:
 		return
@@ -852,6 +937,7 @@ func update_stun_landing() -> void:
 		_fighter.velocity.y = 0.0
 
 
+## Detects the knockdown landing, marking it landed and triggering death or the landing callback.
 func update_knockdown_landing() -> void:
 	if current_state != State.KNOCKDOWN or knockdown_landed:
 		return
@@ -870,16 +956,19 @@ func update_knockdown_landing() -> void:
 			(_fighter as Fighter).on_knockdown_landed()
 
 
+## True while still falling during respawn.
 func is_respawn_falling() -> bool:
 	return current_state == State.RESPAWN and respawn_falling
 
 
+## Enters the respawn fall.
 func enter_respawn() -> void:
 	respawn_falling = true
 	respawn_iframes_remaining = 0.0
 	change_state(State.RESPAWN)
 
 
+## Ends the respawn fall and starts post-respawn invincibility.
 func land_respawn() -> void:
 	if current_state != State.RESPAWN or not respawn_falling:
 		return
@@ -888,41 +977,49 @@ func land_respawn() -> void:
 	state_time = 0.0
 
 
+## Enters the dead state.
 func enter_dead() -> void:
 	respawn_falling = false
 	respawn_iframes_remaining = 0.0
 	change_state(State.DEAD)
 
 
+## True during get-up when a wakeup follow-up can be buffered.
 func can_buffer_wakeup_followup() -> bool:
 	return current_state in [State.GETUP_INVINCIBLE, State.SLOW_GETUP]
 
 
+## Queues the wakeup follow-up action, ignoring roll and slow options.
 func set_wakeup_followup(option: WakeupOption) -> void:
 	if option in [WakeupOption.ROLL_LEFT, WakeupOption.ROLL_RIGHT, WakeupOption.SLOW]:
 		return
 	pending_wakeup_followup = option
 
 
+## True when grounded in knockdown, so knockdown wakeup options are available.
 func can_use_knockdown_wakeup_options() -> bool:
 	return current_state == State.KNOCKDOWN and knockdown_landed
 
 
+## True while on a ledge, so ledge get-up options are available.
 func can_use_ledge_wakeup_options() -> bool:
 	return current_state == State.LEDGE_RECOVERY
 
 
+## Ends grounded knockdown invincibility early by backdating the landing time.
 func forfeit_knockdown_invincibility() -> void:
 	if current_state != State.KNOCKDOWN or not knockdown_landed:
 		return
 	knockdown_landed_at = state_time - KNOCKDOWN_GROUND_INVINCIBLE_DURATION
 
 
+## Cuts a get-up short, completing the wakeup transition immediately.
 func complete_wakeup_early() -> void:
 	if current_state in [State.GETUP_INVINCIBLE, State.SLOW_GETUP]:
 		_complete_wakeup_transition()
 
 
+## Begins a wakeup from knockdown, buffering it if still in the forced-ground window; returns whether it started.
 func begin_knockdown_wakeup(option: WakeupOption) -> bool:
 	if not can_use_knockdown_wakeup_options():
 		return false
@@ -931,16 +1028,19 @@ func begin_knockdown_wakeup(option: WakeupOption) -> bool:
 	return _begin_wakeup(option, false)
 
 
+## Begins a get-up from the ledge; returns whether it started.
 func begin_ledge_wakeup(option: WakeupOption) -> bool:
 	if not can_use_ledge_wakeup_options():
 		return false
 	return _begin_wakeup(option, true)
 
 
+## Attempts a neutral fast get-up from knockdown.
 func try_fast_get_up() -> bool:
 	return begin_knockdown_wakeup(WakeupOption.NEUTRAL)
 
 
+## Enters ledge recovery on the given side, snapping the fighter to the ledge.
 func enter_ledge_recovery(side: int) -> void:
 	ledge_side = side
 	pending_wakeup_followup = WakeupOption.NEUTRAL
@@ -951,6 +1051,7 @@ func enter_ledge_recovery(side: int) -> void:
 	fighter.velocity = Vector2.ZERO
 
 
+## Converts an in-progress wakeup roll into ledge recovery on the given side.
 func snap_wakeup_roll_to_ledge(side: int) -> void:
 	if current_state != State.WAKEUP_ROLL:
 		return
@@ -960,14 +1061,17 @@ func snap_wakeup_roll_to_ledge(side: int) -> void:
 	enter_ledge_recovery(side)
 
 
+## True if a ledge get-up is currently available.
 func try_ledge_get_up() -> bool:
 	return can_use_ledge_wakeup_options()
 
 
+## Begins a neutral get-up from the ledge.
 func begin_ledge_get_up() -> bool:
 	return begin_ledge_wakeup(WakeupOption.NEUTRAL)
 
 
+## Advances the state machine each frame: decays timers and runs per-state timeouts and transitions.
 func tick(delta: float) -> void:
 	if projectile_recovery_remaining > 0.0:
 		projectile_recovery_remaining = maxf(0.0, projectile_recovery_remaining - delta)
@@ -1042,6 +1146,7 @@ func tick(delta: float) -> void:
 				(_fighter as Fighter).resolve_standing_state()
 
 
+## Resolves the neutral ground state (idle/move/block/crouch) from movement and input, when no action is in progress.
 func update_ground_state(
 	is_moving: bool,
 	is_on_floor: bool,

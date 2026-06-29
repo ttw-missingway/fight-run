@@ -1,9 +1,14 @@
 extends Area2D
 class_name FightHitbox
 
+## An owner fighter's attack volume: detects opposing hurtboxes and projectiles
+## during an active attack window, dealing damage to projectiles and announcing
+## clean hits once per victim.
+
 
 #region Signals
 
+## Emitted when an opposing fighter is struck. payload: hit fighter, active attack data.
 signal hit_landed(victim: CharacterBody2D, attack_data: Resource)
 
 #endregion
@@ -33,6 +38,7 @@ var _hit_victims: Dictionary = {}
 
 #region Public API
 
+## Binds the owning fighter, sets collision layers, and wires overlap detection.
 func setup(owner_body: CharacterBody2D) -> void:
 	owner_fighter = owner_body
 	collision_layer = 8
@@ -41,6 +47,8 @@ func setup(owner_body: CharacterBody2D) -> void:
 	area_entered.connect(_on_area_entered)
 
 
+## Opens the attack window: sizes/positions the shape from the data and starts
+## monitoring, preserving already-hit victims when the same attack stays active.
 func activate(data: Resource) -> void:
 	var same_attack_window := monitoring and attack_data == data
 	attack_data = data
@@ -57,6 +65,7 @@ func activate(data: Resource) -> void:
 		_on_area_entered(area)
 
 
+## Closes the attack window and clears the active attack data and hit record.
 func deactivate() -> void:
 	set_deferred("monitoring", false)
 	attack_data = null

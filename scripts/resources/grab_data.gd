@@ -1,6 +1,8 @@
 extends Resource
 class_name GrabData
 
+## Data for a grab/throw: frame timing, grab hitbox geometry, hold offset, and
+## throw knockback.
 
 #region Exports
 

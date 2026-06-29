@@ -1,11 +1,17 @@
 extends CharacterBody2D
 class_name Fighter
 
+## A playable or AI-driven fighter: drives movement, attacks, grabs, projectiles,
+## guard, knockdowns, and ledge play through its FighterStateMachine.
+
 
 #region Signals
 
+## Emitted when the fighter runs out of lives. payload: the fighter that died.
 signal died(fighter: Fighter)
+## Emitted when the fighter respawns after losing a life. payload: the fighter.
 signal respawned(fighter: Fighter)
+## Emitted whenever the state machine enters a new state. payload: the fighter and the new state name.
 signal state_changed(fighter: Fighter, state_name: String)
 
 #endregion
@@ -259,24 +265,29 @@ func _physics_process(delta: float) -> void:
 
 #region Public API
 
+## Returns the attack used when a dash is canceled into an attack.
 func get_dash_attack() -> AttackData:
 	return _dash_attack
 
 
+## Flags the fighter as being pushed by an external force for the given frames, suspending stage-edge clamping.
 func mark_external_displacement(frames: int = EXTERNAL_DISPLACEMENT_FRAMES) -> void:
 	_external_displacement_frames = maxi(_external_displacement_frames, frames)
 
 
+## Freezes the fighter for the given number of frames on a hit; keeps the longest pending hitstop.
 func apply_hitstop(frames: int) -> void:
 	if frames <= 0:
 		return
 	_hitstop_frames = maxi(_hitstop_frames, frames)
 
 
+## Returns true while the fighter is frozen in hitstop.
 func is_in_hitstop() -> bool:
 	return _hitstop_frames > 0
 
 
+## Triggers a brief white body flash, fired when the fighter takes a hit.
 func pulse_hit_flash() -> void:
 	_hit_flash_timer = HIT_FLASH_DURATION
 
@@ -286,10 +297,12 @@ func pulse_charge_flash() -> void:
 	_charge_flash_timer = CHARGE_FLASH_DURATION
 
 
+## Returns true when an airborne fighter that walked off a ledge while crouching should keep its crouch.
 func should_preserve_crouch_air_state() -> bool:
 	return _ledge_crouch_carry and (state_machine.is_crouching() or _is_crouch_intent_held())
 
 
+## Feeds synthetic input (movement, jump, guard, attacks, throws, projectile) for AI- or script-driven control.
 func set_virtual_input(
 	left: bool,
 	right: bool,
@@ -320,10 +333,12 @@ func set_virtual_input(
 		_virtual_projectile_low = true
 
 
+## Clears all synthetic input back to neutral.
 func clear_virtual_input() -> void:
 	set_virtual_input(false, false, false, false, false, "", false, 0, -1.0, false)
 
 
+## Returns true when the fighter is grounded, able to crouch, and the crouch intent is held.
 func is_crouch_held() -> bool:
 	if state_machine.is_knocked_down() or state_machine.is_on_ledge():
 		return false
@@ -334,6 +349,7 @@ func is_crouch_held() -> bool:
 	return _is_crouch_intent_held()
 
 
+## Returns true when the fighter is grounded, able to guard, and the guard button is held.
 func is_guard_held() -> bool:
 	if not _is_grounded_for_stance():
 		return false
@@ -344,6 +360,7 @@ func is_guard_held() -> bool:
 	return _virtual_guard
 
 
+## Picks the appropriate neutral state (idle, move, crouch, block, or air) from current input and footing.
 func resolve_standing_state() -> void:
 	if state_machine.is_on_ledge():
 		return
@@ -367,6 +384,7 @@ func resolve_standing_state() -> void:
 	_ensure_not_orphaned_action_state()
 
 
+## Captures the current facing, move direction, up/down, and on-floor state into a dictionary for buffered actions.
 func build_input_snapshot() -> Dictionary:
 	var move_dir := _get_move_direction()
 	return {
@@ -378,6 +396,7 @@ func build_input_snapshot() -> Dictionary:
 	}
 
 
+## Resolves which attack to run from an input snapshot, mapping direction and footing to the right ground or air attack.
 func resolve_buffered_attack_name(snap: Dictionary) -> String:
 	if not snap.get("on_floor", is_on_floor()):
 		if snap.get("down", false):
@@ -407,18 +426,22 @@ func resolve_buffered_attack_name(snap: Dictionary) -> String:
 	return "neutral"
 
 
+## Attempts to run the next buffered action intent; returns true if one fired.
 func try_execute_action_queue() -> bool:
 	return _try_execute_action_queue()
 
 
+## Returns the buffered input queue rendered as debug display text.
 func get_input_queue_display_text() -> String:
 	return _input_buffer.get_queue_display_text()
 
 
+## Requests a dash in the given direction (-1 left, 1 right).
 func request_dash(direction: int) -> void:
 	_try_dash(direction)
 
 
+## Ends a dash: zeroes ground speed, or carries reduced air momentum when airborne.
 func finish_dash() -> void:
 	var dash_dir := state_machine.dash_direction
 	if is_on_floor():
@@ -427,24 +450,29 @@ func finish_dash() -> void:
 		velocity.x = dash_dir * stats.dash_speed * stats.dash_air_momentum_carry
 
 
+## Requests a grab/throw attempt.
 func request_throw() -> void:
 	_try_throw()
 
 
+## Returns and clears the buffered combo follow-up attack, if any.
 func consume_combo_follow_up() -> AttackData:
 	return state_machine.consume_combo_follow_up()
 
 
+## Fires the charged projectile and ends the startup phase; called when projectile startup finishes.
 func complete_projectile_startup() -> void:
 	var low_angle := state_machine.is_projectile_low_angle()
 	_fire_projectile(state_machine.projectile_pending_charge, low_angle)
 	state_machine.finish_projectile_startup()
 
 
+## Begins a neutral wakeup from knockdown (the fast get-up option).
 func perform_fast_get_up() -> void:
 	state_machine.begin_knockdown_wakeup(FighterStateMachine.WakeupOption.NEUTRAL)
 
 
+## Debug-only: forces the player fighter into a grounded knockdown for testing wakeup.
 func debug_force_knockdown() -> void:
 	if not is_player_controlled:
 		return
@@ -478,10 +506,12 @@ func debug_force_knockdown() -> void:
 	_update_visuals()
 
 
+## Performs a neutral get-up from a ledge hang.
 func perform_ledge_get_up() -> void:
 	perform_ledge_wakeup(FighterStateMachine.WakeupOption.NEUTRAL)
 
 
+## Performs the chosen wakeup option from a ledge hang, re-facing onto the stage.
 func perform_ledge_wakeup(option: FighterStateMachine.WakeupOption) -> void:
 	if not state_machine.begin_ledge_wakeup(option):
 		return
@@ -496,10 +526,12 @@ func perform_ledge_wakeup(option: FighterStateMachine.WakeupOption) -> void:
 	_update_visuals()
 
 
+## Returns the attack used for a wakeup get-up attack.
 func get_wakeup_attack() -> AttackData:
 	return _wakeup_attack
 
 
+## Snaps to the ground and launches the directional attack chosen as a wakeup follow-up (air attacks become neutral).
 func perform_wakeup_followup_attack() -> void:
 	if fight_manager != null:
 		_snap_feet_to_ground()
@@ -510,6 +542,7 @@ func perform_wakeup_followup_attack() -> void:
 	_try_attack(attack_name)
 
 
+## Snaps to the ground and starts a grab as a wakeup follow-up.
 func perform_wakeup_followup_grab() -> void:
 	if fight_manager != null:
 		_snap_feet_to_ground()
@@ -517,6 +550,7 @@ func perform_wakeup_followup_grab() -> void:
 	state_machine.start_grab(_grab)
 
 
+## Activates or deactivates the grabbox for the current grab and updates its debug overlay.
 func set_grabbox_active(active: bool) -> void:
 	if active and state_machine.current_grab != null:
 		grabbox.activate(state_machine.current_grab)
@@ -527,6 +561,7 @@ func set_grabbox_active(active: bool) -> void:
 		grabbox_debug.visible = false
 
 
+## Activates or deactivates the hitbox for the current attack and updates its debug overlay.
 func set_hitbox_active(active: bool) -> void:
 	if active and state_machine.current_attack != null:
 		hitbox.activate(state_machine.current_attack)
@@ -537,6 +572,7 @@ func set_hitbox_active(active: bool) -> void:
 		hitbox_debug.visible = false
 
 
+## Resolves an incoming hit: applies guard, stagger, stun, knockdown, launch, or kill based on the attack and state.
 func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
 	if not state_machine.is_active_in_match():
 		return
@@ -625,6 +661,7 @@ func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
 		ai_controller.notify_took_damage()
 
 
+## Attempts to put this fighter into a grabbed state; returns false if its current state can't be grabbed.
 func try_receive_grab(thrower: Fighter, grab_data: GrabData) -> bool:
 	if not state_machine.is_active_in_match():
 		return false
@@ -651,6 +688,7 @@ func try_receive_grab(thrower: Fighter, grab_data: GrabData) -> bool:
 	return true
 
 
+## Releases the grab and launches this fighter into a throw knockdown in the given direction.
 func apply_throw_from(thrower: Fighter, grab_data: GrabData, throw_vector: int) -> void:
 	set_hitbox_active(false)
 	set_grabbox_active(false)
@@ -665,11 +703,13 @@ func apply_throw_from(thrower: Fighter, grab_data: GrabData, throw_vector: int) 
 	_begin_knockdown_from_impulse(throw_impulse, true)
 
 
+## Frees this fighter from a grab without a throw and zeroes its velocity.
 func release_from_grab() -> void:
 	state_machine.release_from_grab()
 	velocity = Vector2.ZERO
 
 
+## Respawns the fighter at the given position, resets input and state, and emits respawned.
 func respawn_at(spawn_position: Vector2) -> void:
 	var spawn_x := spawn_position.x
 	var spawn_y := spawn_position.y
@@ -689,6 +729,7 @@ func respawn_at(spawn_position: Vector2) -> void:
 	_update_visuals()
 
 
+## Called when a knockdown fall lands: snaps feet to ground, halts velocity, and resets the wakeup press.
 func on_knockdown_landed() -> void:
 	if fight_manager != null:
 		global_position.y = fight_manager.get_ground_y(global_position.x)
@@ -697,6 +738,7 @@ func on_knockdown_landed() -> void:
 	_update_visuals()
 
 
+## State-machine callback: deactivates stale hit/grab boxes, refreshes the hurtbox and visuals, and emits state_changed.
 func on_state_changed(next_state: FighterStateMachine.State) -> void:
 	if next_state != FighterStateMachine.State.ATTACK:
 		set_hitbox_active(false)
@@ -707,6 +749,7 @@ func on_state_changed(next_state: FighterStateMachine.State) -> void:
 	state_changed.emit(self, state_machine.get_state_name())
 
 
+## Positions the fighter hanging on the ledge of the given side and faces it inward.
 func snap_to_ledge(side: int) -> void:
 	if fight_manager == null:
 		return
@@ -716,14 +759,17 @@ func snap_to_ledge(side: int) -> void:
 	facing_pivot.scale.x = float(facing)
 
 
+## Blocks re-grabbing the ledge for the given duration after dropping off.
 func start_ledge_regrab_lockout(duration: float = 1.5) -> void:
 	_ledge_regrab_lockout = duration
 
 
+## Returns true when the fighter walked off a ledge while crouching and is still airborne.
 func is_ledge_crouch_airborne() -> bool:
 	return _ledge_crouch_carry and not is_on_floor()
 
 
+## Toggles the hurt/hit/grab box debug overlays.
 func set_debug_visible(enabled: bool) -> void:
 	_debug_enabled = enabled
 	hurtbox_debug.visible = enabled

@@ -1,5 +1,9 @@
 extends Node2D
 
+## Root of a fight scene: spawns both fighters at their markers, applies the stage
+## profile, and wires the FightManager, HUDs, and training options together. Owns the
+## character-select picks (persisted across restarts) and the match reload.
+
 
 #region Constants
 

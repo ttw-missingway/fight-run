@@ -1,6 +1,9 @@
 extends Resource
 class_name StageProfile
 
+## Describes a stage's ground geometry — raised side flats, sloped transitions,
+## and a dipped center — and derives the collision/visual polygons, ground
+## heights, walkable bounds, and ledge-hang points from those measurements.
 
 #region Exports
 
@@ -22,34 +25,42 @@ class_name StageProfile
 
 #region Public API
 
+## Width of each raised side flat, between the stage edge and its slope.
 func get_edge_flat_width() -> float:
 	return maxf(0.0, half_width - center_flat_half_width - slope_width)
 
 
+## X of the left stage edge.
 func get_left_edge_x() -> float:
 	return -half_width
 
 
+## X of the right stage edge.
 func get_right_edge_x() -> float:
 	return half_width
 
 
+## X where the left slope begins descending from the side flat.
 func get_left_slope_start_x() -> float:
 	return -center_flat_half_width - slope_width
 
 
+## X of the center platform's left edge.
 func get_center_flat_left_x() -> float:
 	return -center_flat_half_width
 
 
+## X of the center platform's right edge.
 func get_center_flat_right_x() -> float:
 	return center_flat_half_width
 
 
+## X where the right slope finishes rising to the side flat.
 func get_right_slope_end_x() -> float:
 	return center_flat_half_width + slope_width
 
 
+## Surface Y at a world X, interpolating across the sloped transitions.
 func get_ground_y(x: float) -> float:
 	x = clampf(x, -half_width, half_width)
 	var left_slope_start := get_left_slope_start_x()
@@ -74,24 +85,29 @@ func get_ground_y(x: float) -> float:
 	return edge_ground_y
 
 
+## Leftmost X a fighter may walk to, inset from the edge.
 func get_walkable_left() -> float:
 	return -half_width + gameplay_inset
 
 
+## Rightmost X a fighter may walk to, inset from the edge.
 func get_walkable_right() -> float:
 	return half_width - gameplay_inset
 
 
+## X at which a fighter hangs from the given ledge side.
 func get_ledge_hang_x(side: int, body_half_width: float = 16.0) -> float:
 	if side < 0:
 		return -half_width + body_half_width * 0.5
 	return half_width - body_half_width * 0.5
 
 
+## Y at which a fighter hangs for a given hang X and body height.
 func get_ledge_hang_y(hang_x: float, body_height: float = 56.0) -> float:
 	return get_ground_y(hang_x) + body_height
 
 
+## Collision polygons for the floor, one quad per flat/slope segment.
 func get_collision_polygons() -> Array[PackedVector2Array]:
 	var left_slope_start := get_left_slope_start_x()
 	var center_left := get_center_flat_left_x()
@@ -133,6 +149,7 @@ func get_collision_polygons() -> Array[PackedVector2Array]:
 	]
 
 
+## Single outline polygon tracing the whole stage surface for rendering.
 func get_visual_polygon() -> PackedVector2Array:
 	var left_slope_start := get_left_slope_start_x()
 	var center_left := get_center_flat_left_x()

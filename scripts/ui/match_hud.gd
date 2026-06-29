@@ -1,8 +1,12 @@
 extends CanvasLayer
 
+## Overlay for a match: shows each fighter's lives and state, an optional input
+## buffer readout, and the end-of-match result panel with its restart button.
+
 
 #region Signals
 
+## Emitted when the player activates the result panel's restart button.
 signal restart_requested
 
 #endregion
@@ -44,6 +48,8 @@ func _process(_delta: float) -> void:
 
 #region Public API
 
+## Binds the HUD to both fighters, wiring state/restart signals and building the
+## input buffer readout. Call once before the match starts.
 func setup(player: Fighter, opponent: Fighter) -> void:
 	_player = player
 	_opponent = opponent
@@ -54,11 +60,13 @@ func setup(player: Fighter, opponent: Fighter) -> void:
 	_build_input_buffer_readout()
 
 
+## Toggles the infinite-lives display, redrawing the life labels accordingly.
 func set_infinite_lives(enabled: bool) -> void:
 	_infinite_lives = enabled
 	_refresh_life_labels()
 
 
+## Shows or hides the live input buffer readout panel.
 func set_input_buffer_visible(enabled: bool) -> void:
 	_show_input_buffer = enabled
 	if _input_buffer_panel != null:
@@ -66,6 +74,7 @@ func set_input_buffer_visible(enabled: bool) -> void:
 	_refresh_input_buffer_display()
 
 
+## Updates the life count shown for whichever fighter is given.
 func update_lives(fighter: Fighter, lives: int) -> void:
 	if fighter == _player:
 		player_lives_label.text = _life_text("Player Lives", lives)
@@ -73,6 +82,7 @@ func update_lives(fighter: Fighter, lives: int) -> void:
 		opponent_lives_label.text = _life_text("AI Lives", lives)
 
 
+## Reveals the result panel with the given outcome text.
 func show_result(text: String) -> void:
 	result_label.text = text
 	result_panel.visible = true

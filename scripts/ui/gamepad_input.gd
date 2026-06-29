@@ -1,6 +1,9 @@
 extends RefCounted
 class_name GamepadInput
 
+## Stateless helpers for reading the primary gamepad, with special handling for
+## Retro-Bit / Hyperkin N64 adapters (custom deadzones and D-pad fallbacks).
+
 
 #region Constants
 
@@ -32,6 +35,7 @@ const N64_DPAD_FALLBACK := {
 
 #region Public API
 
+## Returns the device index of the first connected joypad, or -1 if none.
 static func get_primary_device() -> int:
 	var pads := Input.get_connected_joypads()
 	if pads.is_empty():
@@ -39,6 +43,8 @@ static func get_primary_device() -> int:
 	return int(pads[0])
 
 
+## Human-readable label combining the friendly name and device index, falling
+## back to the primary device when none is given.
 static func get_device_label(device: int = -1) -> String:
 	if device < 0:
 		device = get_primary_device()
@@ -47,6 +53,7 @@ static func get_device_label(device: int = -1) -> String:
 	return "%s (#%d)" % [get_device_friendly_name(device), device]
 
 
+## Display name for the device, prefixing N64 adapters so they read clearly.
 static func get_device_friendly_name(device: int = -1) -> String:
 	if device < 0:
 		device = get_primary_device()
@@ -58,6 +65,8 @@ static func get_device_friendly_name(device: int = -1) -> String:
 	return raw_name
 
 
+## True when the device looks like an N64 adapter, detected via GUID vendor /
+## product match or a name heuristic.
 static func is_n64_adapter_device(device: int = -1) -> bool:
 	if device < 0:
 		device = get_primary_device()
@@ -75,10 +84,12 @@ static func is_n64_adapter_device(device: int = -1) -> bool:
 	)
 
 
+## Alias for is_n64_adapter_device, kept for call sites naming the Retro-Bit pad.
 static func is_retrobit_n64_device(device: int = -1) -> bool:
 	return is_n64_adapter_device(device)
 
 
+## Horizontal intent from stick or D-pad: -1 left, 1 right, 0 neutral.
 static func get_move_direction() -> int:
 	var device := get_primary_device()
 	if device < 0:
@@ -94,6 +105,7 @@ static func get_move_direction() -> int:
 	return 0
 
 
+## True while up is held on the D-pad or the stick is past the deadzone.
 static func is_up_pressed() -> bool:
 	var device := get_primary_device()
 	if device < 0:
@@ -105,6 +117,7 @@ static func is_up_pressed() -> bool:
 	return stick_y <= -deadzone
 
 
+## True while down is held on the D-pad or the stick is past the deadzone.
 static func is_down_pressed() -> bool:
 	var device := get_primary_device()
 	if device < 0:
@@ -116,6 +129,7 @@ static func is_down_pressed() -> bool:
 	return stick_y >= deadzone
 
 
+## True if the given raw button index is currently held on the primary device.
 static func is_button_pressed(button_index: int) -> bool:
 	var device := get_primary_device()
 	if device < 0:
@@ -123,6 +137,8 @@ static func is_button_pressed(button_index: int) -> bool:
 	return Input.is_joy_button_pressed(device, button_index)
 
 
+## Snapshot of live device state (label, GUID, stick, pressed buttons) as text
+## lines for an on-screen debug readout.
 static func poll_debug_lines(device: int = -1) -> PackedStringArray:
 	if device < 0:
 		device = get_primary_device()

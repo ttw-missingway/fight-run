@@ -1,6 +1,10 @@
 extends RefCounted
 class_name ControlSettings
 
+## Static utility for the InputMap: loads, saves, remaps, and resets the
+## remappable action bindings, applies keyboard/gamepad presets (including the
+## Retro-Bit N64 layout), and formats bindings for display.
+
 
 #region Constants
 
@@ -98,6 +102,9 @@ const N64_BUTTON_LABELS := {
 
 #region Public API
 
+## Restores saved bindings into the InputMap, falling back to defaults when the
+## save is missing or unreadable and migrating legacy save formats in place.
+## Call once at startup.
 static func load_bindings() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
 		apply_default_bindings()
@@ -124,6 +131,7 @@ static func load_bindings() -> void:
 	migrate_retrobit_if_needed()
 
 
+## Serializes the current InputMap events for every remappable action to disk.
 static func save_bindings() -> void:
 	var data: Dictionary = {}
 	for entry in REMAPPABLE_ACTIONS:
@@ -141,18 +149,25 @@ static func save_bindings() -> void:
 	file.close()
 
 
+## Loads the default keyboard keys plus Xbox-style gamepad buttons and stick
+## motions into the InputMap (does not save).
 static func apply_default_bindings() -> void:
 	_apply_gamepad_preset(DEFAULT_GAMEPAD_BUTTONS, DEFAULT_GAMEPAD_MOTIONS, XBOX_GAMEPAD_DEADZONE)
 
 
+## Loads the Retro-Bit N64 D-Input button preset into the InputMap (does not save).
 static func apply_n64_dinput_bindings() -> void:
 	_apply_gamepad_preset(DEFAULT_N64_DINPUT_BUTTONS, {}, N64_GAMEPAD_DEADZONE)
 
 
+## Applies the N64 preset if a Retro-Bit N64 controller is connected and still on
+## default bindings; safe to call when no such device is present.
 static func maybe_apply_retrobit_preset() -> void:
 	migrate_retrobit_if_needed()
 
 
+## Swaps still-default Xbox bindings for the N64 preset and saves, but only when a
+## Retro-Bit N64 device is connected; otherwise leaves bindings untouched.
 static func migrate_retrobit_if_needed() -> void:
 	if not GamepadInput.is_retrobit_n64_device():
 		return
@@ -162,6 +177,8 @@ static func migrate_retrobit_if_needed() -> void:
 	save_bindings()
 
 
+## Restores the default bindings for the connected controller (N64 preset for a
+## Retro-Bit device, otherwise the standard preset) and saves.
 static func reset_to_defaults() -> void:
 	if GamepadInput.is_retrobit_n64_device():
 		apply_n64_dinput_bindings()
@@ -170,6 +187,9 @@ static func reset_to_defaults() -> void:
 	save_bindings()
 
 
+## Rebinds an action to a captured key or gamepad button, replacing only events
+## of that input type, mirroring to any linked actions, and saving. Ignores
+## unsupported event types.
 static func remap_action(action: String, event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
@@ -194,6 +214,8 @@ static func remap_action(action: String, event: InputEvent) -> void:
 	save_bindings()
 
 
+## Joined, deduplicated display labels for everything bound to an action, or "—"
+## when nothing is bound.
 static func get_action_display_name(action: String) -> String:
 	var parts: PackedStringArray = []
 	for ev in InputMap.action_get_events(action):
@@ -205,6 +227,8 @@ static func get_action_display_name(action: String) -> String:
 	return " / ".join(parts)
 
 
+## One-line summary pairing every remappable action's label with its current
+## bindings, for an at-a-glance controls readout.
 static func get_controls_summary() -> String:
 	var parts: PackedStringArray = []
 	for entry in REMAPPABLE_ACTIONS:

@@ -1,6 +1,10 @@
 extends Node
 class_name AiController
 
+## Drives a CPU fighter: each think tick it reads the opponent's spacing and
+## state, picks a behavior mode's movement, attacks, and wakeup options, then
+## writes the result onto the parent Fighter as virtual input.
+
 
 #region Enums
 
@@ -129,27 +133,35 @@ func _ready() -> void:
 
 #region Public API
 
+## Human-readable name of the active behavior mode, for UI display.
 func get_mode_label() -> String:
 	return MODE_LABELS.get(behavior_mode, "Unknown")
 
 
+## Tier of the active behavior mode: "Simple" or "Complex".
 func get_mode_category() -> String:
 	return MODE_CATEGORY.get(behavior_mode, "")
 
 
+## Switches to a new behavior mode and resets per-mode state for it.
 func set_behavior_mode(mode: BehaviorMode) -> void:
 	behavior_mode = mode
 	_reset_mode_state()
 
 
+## Tells the AI it was hit, so a simple mode wakes up and starts fighting back.
 func notify_took_damage() -> void:
 	_engaged = true
 
 
+## Tells the AI it blocked a hit, so a simple mode wakes up and engages.
 func notify_blocked_hit() -> void:
 	_engaged = true
 
 
+## Per-frame entry point: ticks the think timer and, when due, decides and emits
+## the next virtual input. Handles ledge/knockdown recovery first; no-ops while
+## disabled, between rounds, or before the AI has engaged.
 func update_input(delta: float) -> void:
 	if not enabled or _fighter == null:
 		return

@@ -9,7 +9,10 @@ extends CanvasLayer
 
 #region Signals
 
+## Emitted when the pause menu opens; the scene tree is now paused.
 signal opened
+
+## Emitted when the pause menu closes; the scene tree is now unpaused.
 signal closed
 
 #endregion
@@ -84,10 +87,12 @@ func _process(_delta: float) -> void:
 
 #region Public API
 
+## Whether the pause menu is currently showing (and the game paused).
 func is_open() -> bool:
 	return _root.visible
 
 
+## Shows the menu on its main screen, pauses the tree, and announces opened.
 func open() -> void:
 	_root.visible = true
 	_show_screen(Screen.MAIN)
@@ -95,6 +100,7 @@ func open() -> void:
 	opened.emit()
 
 
+## Hides the menu, cancels any pending rebind, unpauses, and announces closed.
 func close() -> void:
 	_cancel_rebind()
 	_root.visible = false

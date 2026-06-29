@@ -1,6 +1,6 @@
-# GDScript Region & Layout Style
+# GDScript Style Guide
 
-A consistent, foldable structure for every script in the project.
+A consistent, foldable, well-documented structure for every script in the project.
 
 ## Why regions
 
@@ -52,21 +52,15 @@ class_name Y
 - **Split, don't subdivide.** If a section grows large enough to want internal
   regions, that's a smell the class is doing too much — split the class instead.
 
-## Documentation that pairs with it
+## Documentation
 
-- `##` docstring above every `class_name` and every public method.
-- `#` comments inside a method explain **why**, never **what**.
-- A constant whose name doesn't fully explain itself gets a short `#` note.
-
-```gdscript
-# Good — the name carries the meaning, no comment needed
-var current_hp: int = 0
-
-# Good — a non-obvious tuning value earns a why
-const BURN_LOCK_GRACE := 0.1  # avoids flicker when burn + boost end the same frame
-```
-
-## Skeleton
+- **`##` docstring above every `class_name`** — the *header docstring*: a
+  one-line summary of what the class is, sitting right under the `extends` /
+  `class_name` lines (longer note on following `##` lines if needed).
+- **`##` docstring above every public method** — what it does / when to call it.
+- **`#` comments inside a method explain *why*, never *what*.** If a line needs a
+  comment to say what it does, the names probably aren't carrying their weight.
+- **Non-obvious constants get a short `#` note;** self-explaining names don't.
 
 ```gdscript
 extends Area2D
@@ -75,27 +69,51 @@ class_name MimicProjectile
 ## Mimic's arcing coin: lobs under gravity, lands as a grounded hitbox,
 ## flashes a despawn warning, then topples and fades.
 
-#region Constants
-const WORLD_LAYER: int = 1
-#endregion
+# Good — the name carries the meaning, no comment needed
+var current_hp: int = 0
 
-#region Private state
-var _velocity: Vector2 = Vector2.ZERO
-#endregion
+# Good — a non-obvious tuning value earns a why
+const BURN_LOCK_GRACE := 0.1  # avoids flicker when burn + boost end the same frame
 
-#region Lifecycle
-func _ready() -> void:
-    ...
-#endregion
-
-#region Public API
-## Extends the base spawn: seeds the arc and starts the spin.
+## Extends the base spawn: seeds the arc velocity and starts the spin.
 func setup(...) -> void:
     ...
-#endregion
+```
 
-#region Private helpers
-func _apply_motion(delta: float) -> void:
-    ...
-#endregion
+## Signals
+
+- **Past tense** — a signal announces something that *happened*: `died`,
+  `lives_changed`, `match_over`. (`open_menu` reads like a command — that's a
+  method, not a signal.)
+- **Minimal payload.** Pass only what listeners can't easily ask the sender for;
+  wide payloads ossify the API.
+- **`##` doc above each signal** describing the payload.
+- **Connect in code, not the editor** — connections in `_ready()` (or a
+  dedicated `_connect_signals()`) are greppable; editor wiring is invisible
+  until it breaks.
+- **Connect once.** If a node's lifecycle can re-enter a connection path, guard
+  with `is_connected()` or disconnect on exit.
+
+```gdscript
+## Emitted when an enemy is defeated. payload: enemy that died, source (may be null).
+signal died(fighter: Fighter, source: Fighter)
+```
+
+## Conventions already in force
+
+These match the existing codebase; documented here so the guide is the single
+source of truth.
+
+- **Static typing, always.** Type vars, params, and returns; typed arrays
+  (`Array[Fighter]`, not `Array`). Inferred `:=` is fine when the right-hand side
+  makes the type obvious (`var n := 0`); don't infer ambiguous literals.
+- **Naming.** File `snake_case.gd`; `class_name` PascalCase; vars/funcs
+  `snake_case`; constants `SCREAMING_SNAKE_CASE`; private members leading `_`;
+  enum types PascalCase, values `SCREAMING_SNAKE_CASE`; scene nodes PascalCase.
+- **No magic numbers in logic.** Tunable gameplay values live in `@export`s,
+  `Resource`s, or named `const`s — not inline literals. Loop counters and
+  obvious local literals are fine.
+- **Private by default.** If it isn't called from outside the class, prefix `_`.
+  Keep each class's public surface as small as the job allows.
+- **Header order:** `extends` first, then `class_name` (project convention).
 ```

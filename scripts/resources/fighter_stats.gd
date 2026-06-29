@@ -1,6 +1,9 @@
 class_name FighterStats
 extends Resource
 
+## All tunable per-character data: movement, jumps, dashes, block/knockdown
+## scaling, juggle and wakeup timing, plus the move set (attacks, grab,
+## projectile config) that defines a fighter's identity purely as data.
 
 #region Exports
 

@@ -23,6 +23,7 @@ signal input_buffer_toggled(enabled: bool)
 
 ## Emitted when a character is chosen in the Player / AI dropdowns.
 signal player_character_selected(stats: FighterStats)
+## Emitted when the AI's character is chosen in its dropdown. payload: chosen stats.
 signal ai_character_selected(stats: FighterStats)
 
 #endregion
@@ -70,6 +71,7 @@ func _ready() -> void:
 
 #region Public API
 
+## Highlights the button matching the currently active AI mode, clearing the rest.
 func set_active_ai_mode(mode: int) -> void:
 	for mode_key in _ai_buttons:
 		_ai_buttons[mode_key].button_pressed = mode_key == mode

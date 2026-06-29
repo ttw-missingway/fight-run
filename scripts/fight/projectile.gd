@@ -1,6 +1,10 @@
 extends Area2D
 class_name FightProjectile
 
+## Base straight-line projectile: travels horizontally at a fixed speed, hits the
+## first enemy fighter it overlaps, and clashes with other projectiles by size.
+## Despawns on hit, on timeout, or when it leaves the arena bounds.
+
 
 #region Constants
 
@@ -70,6 +74,8 @@ func _physics_process(delta: float) -> void:
 
 #region Public API
 
+## Configures the projectile from the firing fighter and config, scaling stagger,
+## health, and size by charge, then positions it at the resolved spawn offset.
 func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_angle: bool = false) -> void:
 	owner_fighter = from_fighter
 	direction = from_fighter.facing
@@ -99,6 +105,7 @@ func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_a
 		_on_area_entered(area)
 
 
+## Subtracts health and destroys the projectile once it drops to zero.
 func take_hit(damage: int) -> void:
 	if _destroyed:
 		return
@@ -107,6 +114,7 @@ func take_hit(damage: int) -> void:
 		destroy()
 
 
+## Disables collision and frees the projectile; safe to call more than once.
 func destroy() -> void:
 	if _destroyed:
 		return
@@ -116,6 +124,8 @@ func destroy() -> void:
 	queue_free()
 
 
+## Builds the AttackData for an impact, resolving kill vs. stagger from the
+## current stagger damage and the owner's auto-kill threshold.
 func get_attack_data() -> AttackData:
 	var data := AttackData.new()
 	data.id = "projectile"

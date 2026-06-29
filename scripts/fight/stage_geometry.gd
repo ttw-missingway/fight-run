@@ -1,6 +1,9 @@
 extends StaticBody2D
 class_name StageGeometry
 
+## Builds the stage's collision and fill from a StageProfile, rebuilding both
+## whenever a new profile is applied.
+
 
 #region Exports
 
@@ -33,6 +36,7 @@ func _ready() -> void:
 
 #region Public API
 
+## Swaps in a stage profile, rebuilding collision shapes and the visual fill from it.
 func apply_profile(next_profile: StageProfile) -> void:
 	profile = next_profile
 	if profile == null:

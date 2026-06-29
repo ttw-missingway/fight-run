@@ -1,10 +1,15 @@
 extends Node2D
 class_name RespawnBeam
 
+## Post-death respawn marker: lets a player slide a beam along the platform and
+## confirm a spawn point, or expires on its own once the timer runs out.
+
 
 #region Signals
 
+## Emitted when the player confirms a spawn location. payload: respawning fighter, chosen x.
 signal respawn_confirmed(fighter: Fighter, spawn_x: float)
+## Emitted when the respawn timer elapses without a confirmation. payload: respawning fighter.
 signal expired(fighter: Fighter)
 
 #endregion
@@ -63,6 +68,8 @@ func _process(delta: float) -> void:
 
 #region Public API
 
+## Initializes the beam for a fighter: caches the manager and bounds, seeds the
+## beam at the fighter's position, and starts the countdown.
 func setup(
 	fighter: Fighter,
 	fight_manager: FightManager,

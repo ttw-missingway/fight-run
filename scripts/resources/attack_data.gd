@@ -1,6 +1,8 @@
 extends Resource
 class_name AttackData
 
+## Data for a single attack: hitbox geometry, frame timing, knockback, and the
+## combo/juggle properties that drive how it resolves on whiff, hit, and block.
 
 #region Enums
 
@@ -72,6 +74,7 @@ var source_x: float = 0.0
 
 #region Public API
 
+## Recovery frame count for the given resolution (whiff, hit, or block).
 func get_recovery_frames(outcome: RecoveryOutcome) -> int:
 	match outcome:
 		RecoveryOutcome.HIT:
@@ -82,6 +85,7 @@ func get_recovery_frames(outcome: RecoveryOutcome) -> int:
 			return recovery_frames_whiff
 
 
+## Frame at which a combo follow-up can link, defaulting past the active window.
 func get_combo_link_frame() -> int:
 	if combo_link_frame >= 0:
 		return combo_link_frame

@@ -1,10 +1,18 @@
 extends Node
 class_name FightManager
 
+## Per-match referee: holds both fighters, resolves the stage geometry into the
+## blast/death zones used for ring-outs, and drives respawns (a player aim beam,
+## a timed auto-respawn for the AI) until one side runs out of lives.
+
 
 #region Signals
 
+## Emitted once when a fighter is eliminated, ending the match. payload: surviving
+## fighter, eliminated fighter.
 signal match_over(winner: Fighter, loser: Fighter)
+## Emitted whenever a fighter's life count changes (and once on setup). payload:
+## the fighter and its current life count.
 signal lives_changed(fighter: Fighter, lives: int)
 
 #endregion
@@ -69,6 +77,8 @@ func _process(delta: float) -> void:
 
 #region Public API
 
+## Binds the arena and both fighters, cross-links opponents back-references, and
+## subscribes to their deaths. Call once after the fighters are spawned.
 func setup(arena: Node, player_fighter: Fighter, opponent_fighter: Fighter) -> void:
 	_arena = arena
 	player = player_fighter
@@ -83,6 +93,8 @@ func setup(arena: Node, player_fighter: Fighter, opponent_fighter: Fighter) -> v
 	_emit_lives(opponent)
 
 
+## Adopts a stage profile and recomputes the platform extents, arena bounds, and
+## death line from it. Call before fighters start moving.
 func configure_stage(profile: StageProfile) -> void:
 	stage_profile = profile
 	if profile == null:
@@ -100,32 +112,39 @@ func configure_stage(profile: StageProfile) -> void:
 	death_y = profile.center_ground_y + 140.0
 
 
+## Returns the ground height at a world x, from the stage profile when present.
 func get_ground_y(x: float) -> float:
 	if stage_profile != null:
 		return stage_profile.get_ground_y(x)
 	return platform_y
 
 
+## Returns the world x of the stage's left walkable edge.
 func get_left_edge_x() -> float:
 	if stage_profile != null:
 		return stage_profile.get_left_edge_x()
 	return -platform_surface_half_width
 
 
+## Returns the world x of the stage's right walkable edge.
 func get_right_edge_x() -> float:
 	if stage_profile != null:
 		return stage_profile.get_right_edge_x()
 	return platform_surface_half_width
 
 
+## Returns the on-ground spawn point for a chosen x.
 func get_respawn_position(spawn_x: float) -> Vector2:
 	return Vector2(spawn_x, get_ground_y(spawn_x))
 
 
+## Returns the y near the top of the arena where a respawning fighter drops in from.
 func get_respawn_drop_y() -> float:
 	return arena_bounds.position.y + 24.0
 
 
+## Returns the world x a body of the given half-width hangs at on the given ledge
+## (side < 0 is the left edge, otherwise the right).
 func get_ledge_hang_x(side: int, body_half_width: float = 16.0) -> float:
 	if stage_profile != null:
 		return stage_profile.get_ledge_hang_x(side, body_half_width)
@@ -134,6 +153,7 @@ func get_ledge_hang_x(side: int, body_half_width: float = 16.0) -> float:
 	return platform_surface_half_width - body_half_width * 0.5
 
 
+## Returns the full ledge-hang point for a body of the given size on the given side.
 func get_ledge_hang_position(side: int, body_half_width: float, body_height: float) -> Vector2:
 	var hang_x := get_ledge_hang_x(side, body_half_width)
 	var hang_y := get_ground_y(hang_x) + body_height
@@ -142,10 +162,12 @@ func get_ledge_hang_position(side: int, body_half_width: float, body_height: flo
 	return Vector2(hang_x, hang_y)
 
 
+## Returns whether an x has crossed past either side blast margin (a ring-out).
 func is_outside_horizontal_blast_zone(x: float) -> bool:
 	return x < platform_left - horizontal_blast_margin or x > platform_right + horizontal_blast_margin
 
 
+## Returns whether a point has fallen below the ground at its x (past the fall margin).
 func is_below_local_ground(x: float, y: float) -> bool:
 	return y > get_ground_y(x) + fall_death_margin
 

@@ -1,6 +1,8 @@
 extends Resource
 class_name ProjectileConfig
 
+## Tuning data for chargeable projectiles: charge curve, stagger/health scaling,
+## speed, frame timing, spawn offsets, and the projectile/hit-effect scenes.
 
 #region Exports
 
@@ -31,6 +33,7 @@ class_name ProjectileConfig
 
 #region Public API
 
+## Normalized 0..1 charge level for a held duration, following a log curve.
 func get_charge_ratio(charge_time: float) -> float:
 	var scaled_max := CombatTiming.scale_time(max_charge_time)
 	if scaled_max <= 0.0:

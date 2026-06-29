@@ -44,8 +44,10 @@ func _process(_delta: float) -> void:
 	
 	if target != _current or restart:
 		_current = target
+		var clip_scale := _attack_speed_scale() if target == &"attack" else 1.0
 		_sprite.play(target)
-		_sprite.speed_scale = _attack_speed_scale() if target == &"attack" else 1.0
+		_sprite.speed_scale = clip_scale
+		_drive_attack_hitbox(target, clip_scale)
 
 #endregion
 
@@ -98,6 +100,22 @@ func _air() -> Array:
 		return [&"jump", &"fall", &"idle"]
 	else:
 		return [&"fall", &"jump", &"idle"]
+
+
+# Plays the rig's keyframed-hitbox AnimationPlayer in lockstep with the attack sprite
+# clip — same start frame, same speed_scale — so the boxes stay aligned to the frames.
+# No-op for rigs without an AnimationPlayer/"attack" animation (the Fighter then uses
+# its shared AttackData-driven hitbox instead).
+func _drive_attack_hitbox(target: StringName, clip_scale: float) -> void:
+	var anim := get_node_or_null(^"AnimationPlayer") as AnimationPlayer
+	if anim == null or not anim.has_animation(&"attack"):
+		return
+	if target == &"attack":
+		anim.speed_scale = clip_scale
+		anim.play(&"attack")
+		anim.seek(0.0, true)
+	elif anim.is_playing():
+		anim.stop()
 
 # Scales the attack clip so the whole swing plays across the attack's real
 # frame-data duration. Without this, the clip's fixed FPS means fast attacks

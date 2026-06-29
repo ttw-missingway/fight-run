@@ -27,6 +27,7 @@ var _flash_interval: float = 0.15
 var _fade_out_seconds: float = 0.25
 var _rest_nudge: float = 0.0
 var _flash_tween: Tween
+var _can_knock_down: bool = false
 
 #endregion
 
@@ -52,6 +53,8 @@ func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_a
 	knockback = mc.knockback_strength
 	# Coin charge affects only linger duration and arc size; damage/hitbox are fixed.
 	var tier := _charge_tier(charge_ratio, mc)
+	# Only a fully charged coin (top tier) can knock the enemy down; lighter coins just stagger.
+	_can_knock_down = tier == 2
 	_linger_seconds = _linger_for_tier(tier, mc)
 	# Each charge stage above base scales the target height and distance; gravity then
 	# sets how snappy the resulting lob is.
@@ -66,6 +69,13 @@ func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_a
 	var spr := $AnimatedSprite2D as AnimatedSprite2D
 	spr.scale = Vector2(_sprite_scale * direction, _sprite_scale)
 	spr.play("fly")
+
+
+## Gates knockdown on full charge: a not-fully-charged coin staggers but never knocks down.
+func get_attack_data() -> AttackData:
+	var data := super()
+	data.can_knock_down = _can_knock_down
+	return data
 
 #endregion
 

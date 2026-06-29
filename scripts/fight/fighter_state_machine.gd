@@ -260,7 +260,8 @@ func apply_stagger_hit(
 	attacker: Fighter,
 	stagger_value: int,
 	horizontal_kb: float,
-	hitstun_seconds: float
+	hitstun_seconds: float,
+	can_knock_down: bool = true
 ) -> bool:
 	var serial := attacker.state_machine.attack_hit_serial
 	var attacker_id := attacker.get_instance_id()
@@ -273,8 +274,13 @@ func apply_stagger_hit(
 
 	var knockdown_threshold := (_fighter as Fighter).stats.stagger_meter_knockdown
 	if stagger_meter >= knockdown_threshold:
-		reset_stagger_meter()
-		return true
+		if can_knock_down:
+			reset_stagger_meter()
+			return true
+		# This hit can't fell them (e.g. a not-fully-charged coin): cap the meter just below
+		# the threshold so it still staggers but never triggers a knockdown.
+		stagger_meter = knockdown_threshold - 1
+		(_fighter as Fighter)._update_stagger_meter_display()
 
 	enter_stagger(horizontal_kb, hitstun_seconds)
 	return false
@@ -621,8 +627,10 @@ func start_attack(attack_data: Resource) -> void:
 		attack_frame = 0
 		state_time = 0.0
 		fighter._update_hurtbox_profile()
+		fighter.on_attack_started()
 		return
 	change_state(State.ATTACK)
+	fighter.on_attack_started()
 
 
 ## True when a projectile can be started now (alive, off-ledge, has a config, and accepting input).

@@ -85,6 +85,9 @@ func setup(arena: Node, player_fighter: Fighter, opponent_fighter: Fighter) -> v
 	opponent = opponent_fighter
 	player.opponent = opponent
 	opponent.opponent = player
+	# Both start the match squared up; after this they turn freely with their movement.
+	player.face_opponent()
+	opponent.face_opponent()
 	player.fight_manager = self
 	opponent.fight_manager = self
 	player.died.connect(_on_fighter_died)

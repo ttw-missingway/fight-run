@@ -69,6 +69,10 @@ enum HitType {
 # attacker's position instead.
 var source_x: float = 0.0
 
+# When false, this hit staggers but can never trigger a knockdown (e.g. a not-fully-charged
+# coin). Melee and default attacks leave it true.
+var can_knock_down: bool = true
+
 #endregion
 
 

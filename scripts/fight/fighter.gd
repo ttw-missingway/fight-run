@@ -114,6 +114,10 @@ var stagger_meter_label: Label
 
 #region Private state
 
+var _anim_player: AnimationPlayer
+var _rig_hitbox: Area2D
+var _animation_driven: bool = false
+var _rig_hit_victims: Dictionary = {}
 var _last_move_tap_direction: int = 0
 var _last_move_tap_time: float = -1.0
 var _virtual_throw_direction: int = 0
@@ -219,6 +223,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	state_machine.tick(delta)
+	_poll_rig_hitbox()
 	if _ledge_regrab_lockout > 0.0:
 		_ledge_regrab_lockout = maxf(0.0, _ledge_regrab_lockout - delta)
 	_update_ledge_climb_animation()
@@ -264,6 +269,15 @@ func _physics_process(delta: float) -> void:
 
 
 #region Public API
+
+## Snaps initial facing toward the current opponent. Called once at match start;
+## afterward facing follows the fighter's movement input freely.
+func face_opponent() -> void:
+	if opponent == null:
+		return
+	facing = -1 if opponent.global_position.x < global_position.x else 1
+	facing_pivot.scale.x = float(facing)
+
 
 ## Returns the attack used when a dash is canceled into an attack.
 func get_dash_attack() -> AttackData:
@@ -563,6 +577,12 @@ func set_grabbox_active(active: bool) -> void:
 
 ## Activates or deactivates the hitbox for the current attack and updates its debug overlay.
 func set_hitbox_active(active: bool) -> void:
+	if _animation_driven:
+		# The attack animation fully owns the box's monitoring per frame. The state machine
+		# must NOT toggle it — its startup/active frame counting doesn't line up with the
+		# animation, and toggling here would stomp the box closed. _poll_rig_hitbox closes
+		# the box once the move ends.
+		return
 	if active and state_machine.current_attack != null:
 		hitbox.activate(state_machine.current_attack)
 		_update_hitbox_debug(state_machine.current_attack)
@@ -570,6 +590,13 @@ func set_hitbox_active(active: bool) -> void:
 	else:
 		hitbox.deactivate()
 		hitbox_debug.visible = false
+
+
+## Called by the state machine when an attack begins. For animation-driven rigs, arms
+## the keyframed hitbox with this attack's payload and clears its per-victim hit record.
+func on_attack_started() -> void:
+	if _animation_driven:
+		_rig_hit_victims.clear()
 
 
 ## Resolves an incoming hit: applies guard, stagger, stun, knockdown, launch, or kill based on the attack and state.
@@ -649,7 +676,8 @@ func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
 				attacker,
 				attack_data.stagger_value,
 				stagger_kb,
-				stagger_hitstun
+				stagger_hitstun,
+				attack_data.can_knock_down
 			):
 				_begin_knockdown_from_impulse(
 					_build_knockdown_impulse(direction, attack_data.knockback)
@@ -718,6 +746,8 @@ func respawn_at(spawn_position: Vector2) -> void:
 	global_position = Vector2(spawn_x, spawn_y)
 	velocity = Vector2.ZERO
 	_reset_facing_pivot_transform()
+	# Drop back in squared up against the opponent; free turning resumes from there.
+	face_opponent()
 	visible = true
 	hurtbox.monitorable = true
 	state_machine.enter_respawn()
@@ -775,6 +805,9 @@ func set_debug_visible(enabled: bool) -> void:
 	hurtbox_debug.visible = enabled
 	hitbox_debug.visible = enabled and hitbox.monitoring
 	grabbox_debug.visible = enabled and grabbox.monitoring
+	# Animation-driven rigs draw their attack box from the rig Hitbox, not hitbox_debug.
+	if _animation_driven and _rig_hitbox != null:
+		_rig_hitbox.visible = enabled and _rig_hitbox.monitoring
 	if enabled and state_machine != null and state_machine.current_attack != null:
 		_update_hitbox_debug(state_machine.current_attack)
 	if enabled and state_machine != null and state_machine.current_grab != null:
@@ -815,10 +848,11 @@ func _update_stagger_meter_display() -> void:
 # Builds this fighter's move set from its stats Resource, falling back to the
 # shared defaults for any field the character data leaves unset.
 func _load_attacks() -> void:
+	_attacks = DEFAULT_ATTACKS.duplicate()
 	if stats != null and not stats.attacks.is_empty():
-		_attacks = stats.attacks.duplicate()
-	else:
-		_attacks = DEFAULT_ATTACKS.duplicate()
+		# Character-specific attacks override the defaults by key; any action a character
+		# doesn't define falls back to the shared default move.
+		_attacks.merge(stats.attacks, true)
 	_dash_attack = stats.dash_attack if stats != null and stats.dash_attack != null else DEFAULT_DASH_ATTACK
 	_wakeup_attack = stats.wakeup_attack if stats != null and stats.wakeup_attack != null else DEFAULT_WAKEUP_ATTACK
 	_grab = stats.grab_data if stats != null and stats.grab_data != null else DEFAULT_GRAB
@@ -835,6 +869,7 @@ func _instance_visual_rig() -> void:
 	facing_pivot.add_child(rig)
 	body_rect.visible = false
 	_setup_rig_flash(rig)
+	_setup_animation_driven_hitbox(rig)
 
 
 # Shares one white-flash ShaderMaterial across every sprite in the rig so the hit
@@ -844,6 +879,81 @@ func _setup_rig_flash(rig: Node) -> void:
 	_flash_material = ShaderMaterial.new()
 	_flash_material.shader = load("res://art/shaders/character_flash.gdshader")
 	_assign_flash_material(rig)
+
+
+# If the rig carries an AnimationPlayer + a plain "Hitbox" Area2D, the attack box is
+# keyframed per-frame by the animation (its monitoring + the shape's position; see
+# readme/animated_hitbox_plan.md). The Fighter wires and resolves it. Keeping the rig hitbox
+# SCRIPTLESS keeps the rig scene from pulling the Fighter/Hitbox class web into its own load,
+# which otherwise races the editor's concurrent importer.
+func _setup_animation_driven_hitbox(rig: Node) -> void:
+	_anim_player = rig.get_node_or_null(^"AnimationPlayer") as AnimationPlayer
+	var rig_hitbox := rig.get_node_or_null(^"Hitbox") as Area2D
+	# Only take over once the rig provides the hitbox AND its "attack" animation exists, so a
+	# scaffolded-but-unkeyframed rig keeps using the shared hitbox (no regression meanwhile).
+	if _anim_player == null or rig_hitbox == null or not _anim_player.has_animation(&"attack"):
+		return
+	_animation_driven = true
+	_rig_hitbox = rig_hitbox
+	# Layer 8 (hitbox), masking hurtboxes (4) + projectiles (16) — matching the shared box.
+	rig_hitbox.collision_layer = 8
+	rig_hitbox.collision_mask = 4 | 16
+	rig_hitbox.monitoring = false   # the attack animation turns this on per frame
+
+
+# Polls the animation-driven rig hitbox while it's live. Rescanning every physics frame
+# (instead of relying on area_entered) catches victims already overlapping the box when the
+# animation turns monitoring on — the common point-blank case. _rig_hit_victims dedups, so
+# re-processing the same overlap still lands only one hit per victim per move.
+func _poll_rig_hitbox() -> void:
+	if not _animation_driven or _rig_hitbox == null:
+		return
+	if state_machine.current_attack == null:
+		# The move has ended — close AND hide the box, even when a hit cut the animation short
+		# before its closing keys played (hit-recovery is shorter than the animation length).
+		if _rig_hitbox.monitoring:
+			_rig_hitbox.monitoring = false
+		if _rig_hitbox.visible:
+			_rig_hitbox.visible = false
+		return
+	if not _rig_hitbox.monitoring:
+		if _rig_hitbox.visible:
+			_rig_hitbox.visible = false
+		return
+	# The box is live this frame; show its debug shape only while the F1 overlays are on.
+	_rig_hitbox.visible = _debug_enabled
+	for area in _rig_hitbox.get_overlapping_areas():
+		_try_rig_hit(area)
+
+
+# Resolves a single overlap from the animation-driven rig hitbox. Lives on the Fighter (not
+# the rig node) so the rig scene stays scriptless, and because the Fighter has full type context.
+func _try_rig_hit(area: Area2D) -> void:
+	var attack := state_machine.current_attack as AttackData
+	if attack == null:
+		return
+	if area is FightProjectile:
+		var projectile := area as FightProjectile
+		if projectile.owner_fighter == self:
+			return
+		var damage: int = attack.stagger_value
+		if attack.hit_type == AttackData.HitType.KILL:
+			damage = 100
+		projectile.take_hit(damage)
+		return
+	if not area is FightHurtbox:
+		return
+	var victim := (area as FightHurtbox).owner_fighter as Fighter
+	if victim == null or victim == self:
+		return
+	if _rig_hit_victims.has(victim.get_instance_id()):
+		return
+	if attack.is_anti_air and victim.is_on_floor():
+		return
+	if victim.state_machine.is_knockdown_falling():
+		return
+	_rig_hit_victims[victim.get_instance_id()] = true
+	_on_hit_landed(victim, attack)
 
 
 func _assign_flash_material(node: Node) -> void:
@@ -1158,6 +1268,12 @@ func _apply_air_control(delta: float) -> void:
 		return
 	var move_dir := _get_move_direction()
 	if move_dir != 0:
+		# Pressing against your air momentum (e.g. back during a forward jump) shouldn't
+		# kill the jump arc. Only let drift maintain/extend the current direction, or start
+		# drift from a neutral (vertical) jump.
+		var momentum_dir := signf(velocity.x)
+		if momentum_dir != 0.0 and float(move_dir) != momentum_dir:
+			return
 		velocity.x = move_dir * stats.air_move_speed
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, stats.air_move_speed * 3.0 * delta)
@@ -2065,8 +2181,16 @@ func _update_facing() -> void:
 		return
 	if state_machine.is_holding_grab():
 		return
-	facing = 1 if opponent.global_position.x >= global_position.x else -1
-	facing_pivot.scale.x = float(facing)
+	# Face the direction of movement so the fighter can turn around freely instead of always
+	# staring at the opponent (and moonwalking backward). With no input, hold the last facing.
+	var move_dir := 0
+	if _is_left_pressed() and not _is_right_pressed():
+		move_dir = -1
+	elif _is_right_pressed() and not _is_left_pressed():
+		move_dir = 1
+	if move_dir != 0:
+		facing = move_dir
+		facing_pivot.scale.x = float(facing)
 
 
 func _update_visuals() -> void:
@@ -2132,17 +2256,19 @@ func _update_visuals() -> void:
 
 	if _hit_flash_timer > 0.0:
 		var flash_strength := clampf(_hit_flash_timer / HIT_FLASH_DURATION, 0.0, 1.0)
-		body_rect.color = body_rect.color.lerp(Color.WHITE, flash_strength * 0.82)
+		var inverse := Color(1.0 - body_rect.color.r, 1.0 - body_rect.color.g, 1.0 - body_rect.color.b)
+		body_rect.color = body_rect.color.lerp(inverse, flash_strength)
 
 	if _charge_flash_timer > 0.0:
 		var charge_strength := clampf(_charge_flash_timer / CHARGE_FLASH_DURATION, 0.0, 1.0)
 		body_rect.color = body_rect.color.lerp(Color.WHITE, charge_strength)
 
-	# Drive the same flashes onto the art rig (its sprite, not the hidden body_rect).
+	# Drive the flashes onto the art rig: hit = inverse colors, charge = white.
 	if _flash_material != null:
-		var hit_amount := clampf(_hit_flash_timer / HIT_FLASH_DURATION, 0.0, 1.0) * 0.82
+		var hit_amount := clampf(_hit_flash_timer / HIT_FLASH_DURATION, 0.0, 1.0)
 		var charge_amount := clampf(_charge_flash_timer / CHARGE_FLASH_DURATION, 0.0, 1.0)
-		_flash_material.set_shader_parameter("flash_amount", maxf(hit_amount, charge_amount))
+		_flash_material.set_shader_parameter("invert_amount", hit_amount)
+		_flash_material.set_shader_parameter("flash_amount", charge_amount)
 
 	_update_frame_overlays()
 
@@ -2249,7 +2375,6 @@ func _apply_hit_feedback(
 	apply_hitstop(frames)
 	victim.apply_hitstop(frames)
 	if not was_blocked:
-		pulse_hit_flash()
 		victim.pulse_hit_flash()
 
 

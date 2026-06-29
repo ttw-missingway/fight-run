@@ -117,6 +117,9 @@ var _virtual_projectile_low: bool = false
 var _pending_attack_name: String = ""
 var _hold_guard: bool = false
 var _hold_crouch: bool = false
+# Until the player picks an AI mode in the training HUD, the AI is a passive dummy:
+# it stands still and takes hits rather than acting on its default mode.
+var _mode_selected: bool = false
 
 #endregion
 
@@ -147,6 +150,8 @@ func get_mode_category() -> String:
 func set_behavior_mode(mode: BehaviorMode) -> void:
 	behavior_mode = mode
 	_reset_mode_state()
+	# Picking any mode (including Block) activates the AI; before this it's a passive dummy.
+	_mode_selected = true
 
 
 ## Tells the AI it was hit, so a simple mode wakes up and starts fighting back.
@@ -174,6 +179,15 @@ func update_input(delta: float) -> void:
 		return
 
 	if _handle_recovery_input():
+		return
+
+	if not _mode_selected:
+		# Passive training dummy: stand still and take hits until the player selects an AI
+		# mode in the training HUD. Recovery above still runs, so it stands back up.
+		_hold_guard = false
+		_hold_crouch = false
+		_move_direction = 0
+		_fighter.clear_virtual_input()
 		return
 
 	if not _survival_active():

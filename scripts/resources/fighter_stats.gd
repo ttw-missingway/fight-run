@@ -13,6 +13,12 @@ extends Resource
 @export var visual_scene: PackedScene
 
 @export var max_lives: int = 3
+@export var max_mana: int = 3
+@export var back_dash_mana_cost: int = 1
+@export var combo_break_mana_cost: int = 1
+@export var combo_break_push_knockback: float = 780.0
+@export var combo_break_slide_duration: float = 0.48
+@export var combo_break_close_range: float = 96.0
 @export var weight: float = 1.0
 @export var body_push_factor: float = 22.0
 @export var move_speed: float = 220.0

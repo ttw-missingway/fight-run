@@ -15,7 +15,9 @@ signal restart_requested
 #region Onready
 
 @onready var player_lives_label: Label = $Control/PlayerLivesLabel
+@onready var player_mana_label: Label = $Control/PlayerManaLabel
 @onready var opponent_lives_label: Label = $Control/OpponentLivesLabel
+@onready var opponent_mana_label: Label = $Control/OpponentManaLabel
 @onready var state_label: Label = $Control/StateLabel
 @onready var result_panel: PanelContainer = $Control/ResultPanel
 @onready var result_label: Label = $Control/ResultPanel/ResultVBox/ResultLabel
@@ -30,6 +32,7 @@ signal restart_requested
 var _player: Fighter
 var _opponent: Fighter
 var _infinite_lives: bool = false
+var _infinite_mana: bool = false
 var _show_input_buffer: bool = false
 var _input_buffer_panel: PanelContainer
 var _input_buffer_label: Label
@@ -66,6 +69,12 @@ func set_infinite_lives(enabled: bool) -> void:
 	_refresh_life_labels()
 
 
+## Toggles the infinite-mana display, redrawing the mana labels accordingly.
+func set_infinite_mana(enabled: bool) -> void:
+	_infinite_mana = enabled
+	_refresh_mana_labels()
+
+
 ## Shows or hides the live input buffer readout panel.
 func set_input_buffer_visible(enabled: bool) -> void:
 	_show_input_buffer = enabled
@@ -80,6 +89,14 @@ func update_lives(fighter: Fighter, lives: int) -> void:
 		player_lives_label.text = _life_text("Player Lives", lives)
 	elif fighter == _opponent:
 		opponent_lives_label.text = _life_text("AI Lives", lives)
+
+
+## Updates the mana count shown for whichever fighter is given.
+func update_mana(fighter: Fighter, mana: int) -> void:
+	if fighter == _player:
+		player_mana_label.text = _mana_text("Player Mana", mana)
+	elif fighter == _opponent:
+		opponent_mana_label.text = _mana_text("AI Mana", mana)
 
 
 ## Reveals the result panel with the given outcome text.
@@ -129,6 +146,19 @@ func _refresh_life_labels() -> void:
 		update_lives(_player, _player.lives)
 	if _opponent != null:
 		update_lives(_opponent, _opponent.lives)
+
+
+func _mana_text(prefix: String, mana: int) -> String:
+	if _infinite_mana:
+		return "%s: ∞" % prefix
+	return "%s: %d" % [prefix, mana]
+
+
+func _refresh_mana_labels() -> void:
+	if _player != null:
+		update_mana(_player, _player.mana)
+	if _opponent != null:
+		update_mana(_opponent, _opponent.mana)
 
 
 func _on_state_changed(fighter: Fighter, state_name: String) -> void:

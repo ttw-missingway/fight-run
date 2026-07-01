@@ -14,7 +14,7 @@ anchor_right = 1.0
 offset_left = -184.0
 offset_top = 88.0
 offset_right = -8.0
-offset_bottom = 468.0
+offset_bottom = 492.0
 grow_horizontal = 0
 
 [node name="VBox" type="VBoxContainer" parent="AiSelectorPanel" unique_id=153018026]
@@ -24,6 +24,10 @@ theme_override_constants/separation = 6
 [node name="InfiniteToggle" type="CheckButton" parent="AiSelectorPanel/VBox" unique_id=667726765]
 layout_mode = 2
 text = "Infinite Lives"
+
+[node name="InfiniteManaToggle" type="CheckButton" parent="AiSelectorPanel/VBox" unique_id=667726766]
+layout_mode = 2
+text = "Infinite Mana"
 
 [node name="Scroll" type="ScrollContainer" parent="AiSelectorPanel/VBox" unique_id=883340183]
 layout_mode = 2

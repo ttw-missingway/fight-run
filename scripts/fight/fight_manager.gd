@@ -14,6 +14,7 @@ signal match_over(winner: Fighter, loser: Fighter)
 ## Emitted whenever a fighter's life count changes (and once on setup). payload:
 ## the fighter and its current life count.
 signal lives_changed(fighter: Fighter, lives: int)
+signal mana_changed(fighter: Fighter, mana: int)
 
 #endregion
 
@@ -49,6 +50,7 @@ var player: Fighter
 var opponent: Fighter
 var match_finished: bool = false
 var infinite_lives: bool = false
+var infinite_mana: bool = false
 
 #endregion
 
@@ -94,6 +96,8 @@ func setup(arena: Node, player_fighter: Fighter, opponent_fighter: Fighter) -> v
 	opponent.died.connect(_on_fighter_died)
 	_emit_lives(player)
 	_emit_lives(opponent)
+	_emit_mana(player)
+	_emit_mana(opponent)
 
 
 ## Adopts a stage profile and recomputes the platform extents, arena bounds, and
@@ -229,5 +233,15 @@ func _finish_match(loser: Fighter) -> void:
 
 func _emit_lives(fighter: Fighter) -> void:
 	lives_changed.emit(fighter, fighter.lives)
+
+
+## Re-emits mana_changed for a fighter. Fighters call this after spending or
+## regaining mana so the HUD stays current.
+func notify_mana_changed(fighter: Fighter) -> void:
+	_emit_mana(fighter)
+
+
+func _emit_mana(fighter: Fighter) -> void:
+	mana_changed.emit(fighter, fighter.mana)
 
 #endregion

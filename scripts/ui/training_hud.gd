@@ -15,6 +15,9 @@ signal ai_mode_selected(mode: int)
 ## Emitted when the Infinite Lives toggle changes.
 signal infinite_mode_toggled(enabled: bool)
 
+## Emitted when the Infinite Mana toggle changes.
+signal infinite_mana_toggled(enabled: bool)
+
 ## Emitted when the debug "Knock Down" button is pressed.
 signal debug_knockdown_requested
 
@@ -33,6 +36,7 @@ signal ai_character_selected(stats: FighterStats)
 
 @onready var _panel: PanelContainer = $AiSelectorPanel
 @onready var _infinite_toggle: CheckButton = $AiSelectorPanel/VBox/InfiniteToggle
+@onready var _infinite_mana_toggle: CheckButton = $AiSelectorPanel/VBox/InfiniteManaToggle
 @onready var _inner: VBoxContainer = $AiSelectorPanel/VBox/Scroll/Inner
 
 #endregion
@@ -60,6 +64,9 @@ func _ready() -> void:
 	_infinite_toggle.toggled.connect(func(enabled: bool) -> void:
 		_infinite_lives = enabled
 		infinite_mode_toggled.emit(enabled)
+	)
+	_infinite_mana_toggle.toggled.connect(func(enabled: bool) -> void:
+		infinite_mana_toggled.emit(enabled)
 	)
 	_build_character_section()
 	_add_mode_selection(_inner, "Simple AI", AiController.SIMPLE_MODES)

@@ -6,6 +6,7 @@
 script = ExtResource("1")
 id = "back_overhead"
 knockback = 285.0
+stagger_value = 10
 is_overhead = true
 startup_frames = 12
 active_frames = 7

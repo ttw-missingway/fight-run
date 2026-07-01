@@ -15,8 +15,8 @@ class_name ProjectileConfig
 @export var charge_log_speed: float = 3.0
 @export var speed: float = 420.0
 @export var knockback: float = 175.0
-@export var startup_frames: int = 6
-@export var recovery_frames: int = 14
+@export var startup_frames: int = 10
+@export var recovery_frames: int = 28
 @export var min_size: Vector2 = Vector2(14.0, 14.0)
 @export var max_size: Vector2 = Vector2(40.0, 40.0)
 @export var spawn_offset: Vector2 = Vector2(38.0, -28.0)

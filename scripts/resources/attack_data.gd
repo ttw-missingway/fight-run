@@ -27,7 +27,7 @@ enum HitType {
 @export var id: String = "attack"
 @export var knockback: float = 200.0
 @export var hit_type: HitType = HitType.STAGGER
-@export_range(1, 30) var stagger_value: int = 3
+@export_range(1, 30) var stagger_value: int = 6
 @export var keeps_crouch: bool = false
 @export var is_overhead: bool = false
 @export var is_anti_air: bool = false
@@ -50,6 +50,8 @@ enum HitType {
 @export var combo_follow_up: AttackData
 @export var combo_link_frame: int = -1
 @export var auto_combo_on_hit: bool = false
+@export var auto_chain_follow_up: bool = false
+@export var combo_requires_contact: bool = false
 @export var is_juggle_attack: bool = false
 @export var juggle_suspend_frames: int = 0
 @export var hitstop_frames: int = 0

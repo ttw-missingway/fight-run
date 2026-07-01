@@ -101,6 +101,8 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 	if victim_fighter != null and victim_fighter.state_machine.is_knockdown_falling():
 		return
+	if victim_fighter != null and victim_fighter.state_machine.is_invincible():
+		return
 	_hit_victims[victim.get_instance_id()] = true
 	hit_landed.emit(victim, attack_data)
 

@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "back_retreat"
 knockback = 240.0
-stagger_value = 7
+stagger_value = 12
 is_retreat_jump = true
 retreat_hop_velocity = Vector2(260, -340)
 startup_frames = 4

@@ -76,7 +76,6 @@ func tick(delta: float) -> void:
 		return
 	if _is_pressed(f):
 		_projectile_auto_release = Input.is_action_just_pressed("projectile")
-		f.clear_air_forward_combo()
 		f.state_machine.begin_projectile_charge(f.is_down_pressed())
 		_projectile_charging = true
 		_charge_half_flashed = false
@@ -130,7 +129,6 @@ func fire_charged() -> void:
 func begin_buffered_charge(low_angle: bool) -> void:
 	var f := _fighter as Fighter
 	_projectile_auto_release = not Input.is_action_pressed("projectile")
-	f.clear_air_forward_combo()
 	f.state_machine.begin_projectile_charge(low_angle)
 	_projectile_charging = true
 

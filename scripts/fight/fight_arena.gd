@@ -69,11 +69,13 @@ func _ready() -> void:
 	fight_manager.setup(self, player, opponent)
 	fight_manager.match_over.connect(_on_match_over)
 	fight_manager.lives_changed.connect(_on_lives_changed)
+	fight_manager.mana_changed.connect(_on_mana_changed)
 	match_hud.restart_requested.connect(_restart_match)
 
 	match_hud.setup(player, opponent)
 	training_hud.ai_mode_selected.connect(_on_ai_mode_selected)
 	training_hud.infinite_mode_toggled.connect(_on_infinite_mode_toggled)
+	training_hud.infinite_mana_toggled.connect(_on_infinite_mana_toggled)
 	training_hud.debug_knockdown_requested.connect(_debug_knockdown_player)
 	training_hud.input_buffer_toggled.connect(_on_input_buffer_toggled)
 	training_hud.player_character_selected.connect(_on_player_character_selected)
@@ -81,6 +83,8 @@ func _ready() -> void:
 	training_hud.set_active_characters(player_stats, opponent_stats)
 	_on_lives_changed(player, player.lives)
 	_on_lives_changed(opponent, opponent.lives)
+	_on_mana_changed(player, player.mana)
+	_on_mana_changed(opponent, opponent.mana)
 	_set_debug_visibility(debug_hitboxes)
 
 
@@ -131,6 +135,15 @@ func _on_infinite_mode_toggled(enabled: bool) -> void:
 
 func _on_input_buffer_toggled(enabled: bool) -> void:
 	match_hud.set_input_buffer_visible(enabled)
+
+
+func _on_infinite_mana_toggled(enabled: bool) -> void:
+	fight_manager.infinite_mana = enabled
+	match_hud.set_infinite_mana(enabled)
+
+
+func _on_mana_changed(fighter: Fighter, mana: int) -> void:
+	match_hud.update_mana(fighter, mana)
 
 
 func _set_debug_visibility(enabled: bool) -> void:

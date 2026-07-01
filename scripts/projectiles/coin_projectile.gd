@@ -1,7 +1,7 @@
 extends FightProjectile
-class_name MimicProjectile
+class_name CoinProjectile
 
-## Mimic's arcing coin: lobs under gravity, then on contact with the stage floor
+## Arcing coin projectile: lobs under gravity, then on contact with the stage floor
 ## spins in place as a grounded hitbox for the linger duration. Over the final
 ## stretch it flashes a despawn warning, then topples over (no longer a hitbox)
 ## and fades out.
@@ -10,6 +10,15 @@ class_name MimicProjectile
 #region Constants
 
 const WORLD_LAYER: int = 1
+
+#endregion
+
+
+#region Onready
+
+@onready var _linger_shape: CollisionShape2D = $LingerShape
+@onready var _fly_debug: Polygon2D = $FlightShape/DebugFill
+@onready var _linger_debug: Polygon2D = $LingerShape/DebugFill
 
 #endregion
 
@@ -36,9 +45,16 @@ var _can_knock_down: bool = false
 
 func _ready() -> void:
 	super()
-	# Also watch the stage floor; the floor is a body, so it arrives via body_entered.
 	collision_mask |= WORLD_LAYER
 	body_entered.connect(_on_body_entered)
+	# The Godot editor sets visible=false on CollisionShape2D nodes when the user hides
+	# the gizmo in the scene view. That blocks all child Polygon2D nodes from rendering.
+	# Force both shape nodes back to visible at runtime so DebugFill children can show.
+	collision_shape.visible = true
+	_linger_shape.visible = true
+	# Both fills start hidden; set_debug_visible() controls them via F1.
+	_fly_debug.visible = false
+	_linger_debug.visible = false
 
 #endregion
 
@@ -46,9 +62,9 @@ func _ready() -> void:
 #region Public API
 
 ## Extends the base spawn: seeds the arc velocity, sizes the coin, and starts the spin.
-func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_angle: bool = false) -> void:
-	super(from_fighter, charge, config, low_angle)
-	var mc := config as MimicProjectileConfig
+func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_angle: bool = false, spawn_position: Vector2 = Vector2.INF) -> void:
+	super(from_fighter, charge, config, low_angle, spawn_position)
+	var mc := config as CoinProjectileConfig
 	_gravity = mc.gravity
 	knockback = mc.knockback_strength
 	# Coin charge affects only linger duration and arc size; damage/hitbox are fixed.
@@ -69,6 +85,18 @@ func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_a
 	var spr := $AnimatedSprite2D as AnimatedSprite2D
 	spr.scale = Vector2(_sprite_scale * direction, _sprite_scale)
 	spr.play("fly")
+
+
+## Skips resizing the collision shapes — coin hitboxes are authored in the scene editor.
+func _apply_size(size: Vector2) -> void:
+	body_rect.size = size
+	body_rect.position = -size * 0.5
+
+
+## Shows or hides the active hitbox shape's DebugFill — fly shape while airborne, linger shape once landed.
+func set_debug_visible(enabled: bool) -> void:
+	_fly_debug.visible = enabled and not _landed
+	_linger_debug.visible = enabled and _landed
 
 
 ## Gates knockdown on full charge: a not-fully-charged coin staggers but never knocks down.
@@ -100,6 +128,13 @@ func _on_land() -> void:
 	if _landed:
 		return
 	_landed = true
+	# Swap to the linger hitbox so each phase can be authored independently in the editor.
+	# Deferred because shape state can't be changed while the physics server is flushing queries.
+	collision_shape.set_deferred(&"disabled", true)
+	_linger_shape.set_deferred(&"disabled", false)
+	if _fly_debug.visible:
+		_fly_debug.visible = false
+		_linger_debug.visible = true
 	# body_entered fires after the shape has already dipped into the floor, so snap
 	# the coin flush to the real ground surface rather than freezing where it overshot.
 	_snap_to_ground()
@@ -114,7 +149,7 @@ func _on_land() -> void:
 ## Coin charge tier by how long the shot was actually held: 0 = below half, 1 = half,
 ## 2 = full. The charge curve is logarithmic, so the damage ratio is converted back to
 ## a linear time fraction first — matching the player's "half charge" feel and flash.
-func _charge_tier(ratio: float, mc: MimicProjectileConfig) -> int:
+func _charge_tier(ratio: float, mc: CoinProjectileConfig) -> int:
 	var held := _charge_time_fraction(ratio, mc)
 	if held >= mc.full_charge_threshold:
 		return 2
@@ -123,7 +158,7 @@ func _charge_tier(ratio: float, mc: MimicProjectileConfig) -> int:
 	return 0
 
 
-func _linger_for_tier(tier: int, mc: MimicProjectileConfig) -> float:
+func _linger_for_tier(tier: int, mc: CoinProjectileConfig) -> float:
 	match tier:
 		2:
 			return mc.ground_linger_seconds
@@ -144,7 +179,7 @@ func _arc_launch_velocity(height: float, distance: float) -> Vector2:
 
 
 ## Inverts the logarithmic charge curve to recover the fraction of max hold time.
-func _charge_time_fraction(ratio: float, mc: MimicProjectileConfig) -> float:
+func _charge_time_fraction(ratio: float, mc: CoinProjectileConfig) -> float:
 	var scaled_max := CombatTiming.scale_time(mc.max_charge_time)
 	var a := scaled_max * mc.charge_log_speed
 	if a <= 0.0:

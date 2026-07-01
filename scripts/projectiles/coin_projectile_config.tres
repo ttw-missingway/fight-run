@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CoinProjectileConfig" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/projectiles/coin_projectile_config.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://dxwq5tse7otvj" path="res://scenes/projectiles/coin_projectile.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+projectile_scene = ExtResource("2")
+min_stagger = 40
+max_stagger = 40
+min_health = 8
+max_health = 8
+min_size = Vector2(32, 32)
+max_size = Vector2(32, 32)

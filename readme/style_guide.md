@@ -117,3 +117,20 @@ source of truth.
   Keep each class's public surface as small as the job allows.
 - **Header order:** `extends` first, then `class_name` (project convention).
 ```
+
+## Debug overlay colors
+
+All collision debug fills use the same palette and opacity. Apply these to `ColorRect` debug nodes in fighter scenes and `Polygon2D` `DebugFill` children of `CollisionShape2D` nodes in rig scenes.
+
+| Role | Color constant | RGBA |
+|---|---|---|
+| Hitbox (offensive) | `HITBOX_DEBUG_COLOR` | `Color(0.91, 0.0, 0.73, 0.42)` — magenta |
+| Hurtbox (vulnerable) | `HURTBOX_DEBUG_COLOR` | `Color(0.2, 0.9, 0.2, 0.42)` — green |
+| Grabbox | `GRABBOX_DEBUG_COLOR` | `Color(0.96, 0.65, 0.14, 0.42)` — amber |
+| I-frames (invincible) | — | `Color(0.15, 0.82, 1.0, 0.8)` — cyan, pulsing |
+| V-frames (vulnerable state) | — | `Color(1.0, 0.05, 0.45, 0.85)` — pink, pulsing |
+
+Rules:
+- Hitboxes are always **magenta**. Hurtboxes are always **green**. Grabboxes are always **amber**.
+- All fills use **0.42 alpha** (i-frame/v-frame overlays pulse and use higher alpha by design).
+- `DebugFill` `Polygon2D` nodes live as direct children of their `CollisionShape2D` so they inherit position and scale automatically.

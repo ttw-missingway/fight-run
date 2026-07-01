@@ -594,8 +594,7 @@ func change_state(next_state: State) -> void:
 		projectile_pending_low = false
 		var fighter := _fighter as Fighter
 		if fighter != null:
-			fighter._projectile_charging = false
-			fighter._projectile_auto_release = false
+			fighter._projectile_launcher.reset()
 	current_state = next_state
 	state_time = 0.0
 	attack_frame = 0

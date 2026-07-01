@@ -1,8 +1,8 @@
 extends ProjectileConfig
-class_name MimicProjectileConfig
+class_name CoinProjectileConfig
 
-## Adds Mimic's arc-and-linger tunables on top of the base straight-line
-## projectile config. Consumed by MimicProjectile.
+## Arc-and-linger tunables on top of the base straight-line projectile config.
+## Consumed by CoinProjectile.
 
 
 #region Exports
@@ -10,8 +10,7 @@ class_name MimicProjectileConfig
 ## Downward acceleration applied to the lob each second (px/s²). Controls arc snappiness.
 @export var gravity: float = 900.0
 
-## Knockback the coin applies on hit; overrides the inherited base ProjectileConfig
-## knockback for Mimic only.
+## Knockback the coin applies on hit; overrides the inherited base ProjectileConfig knockback.
 @export var knockback_strength: float = 175.0
 
 ## Base arc peak height in px, before charge scaling.

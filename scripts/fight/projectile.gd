@@ -16,7 +16,7 @@ const PROJECTILE_LAYER := 16
 
 #region Onready
 
-@onready var collision_shape: CollisionShape2D = $CollisionShape2D
+@onready var collision_shape: CollisionShape2D = $FlightShape
 @onready var body_rect: ColorRect = $BodyRect
 
 #endregion
@@ -75,8 +75,9 @@ func _physics_process(delta: float) -> void:
 #region Public API
 
 ## Configures the projectile from the firing fighter and config, scaling stagger,
-## health, and size by charge, then positions it at the resolved spawn offset.
-func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_angle: bool = false) -> void:
+## health, and size by charge, then positions it at spawn_position. When
+## spawn_position is Vector2.INF the config offset is used as a fallback.
+func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_angle: bool = false, spawn_position: Vector2 = Vector2.INF) -> void:
 	owner_fighter = from_fighter
 	direction = from_fighter.facing
 	charge_ratio = clampf(charge, 0.0, 1.0)
@@ -96,13 +97,21 @@ func setup(from_fighter: Fighter, charge: float, config: ProjectileConfig, low_a
 	size_value = maxf(size.x, size.y)
 	_apply_size(size)
 
-	var spawn_offset := _resolve_spawn_offset(config, from_fighter.is_on_floor())
-	global_position = from_fighter.global_position + Vector2(spawn_offset.x * direction, spawn_offset.y)
+	if spawn_position != Vector2.INF:
+		global_position = spawn_position
+	else:
+		var spawn_offset := _resolve_spawn_offset(config, from_fighter.is_on_floor())
+		global_position = from_fighter.global_position + Vector2(spawn_offset.x * direction, spawn_offset.y)
 
 	body_rect.color = from_fighter.body_color.lightened(0.35)
 
 	for area in get_overlapping_areas():
 		_on_area_entered(area)
+
+
+## Shows or hides the body_rect debug overlay. Called by the arena's F1 toggle.
+func set_debug_visible(enabled: bool) -> void:
+	body_rect.visible = enabled
 
 
 ## Subtracts health and destroys the projectile once it drops to zero.

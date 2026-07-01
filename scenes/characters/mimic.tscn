@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" uid="uid://djl5jj6j8j7e6" path="res://scripts/characters/character_animator.gd" id="1_ry7hn"]
 [ext_resource type="SpriteFrames" uid="uid://ckgcyv0xmp7vg" path="res://art/characters/mimic/mimic_frames.tres" id="2_ry7hn"]
+[ext_resource type="Script" uid="uid://dysnujdq4o0po" path="res://scripts/fight/hurtbox.gd" id="3_ry7hn"]
+[ext_resource type="Script" uid="uid://cn1ini8ixr1cb" path="res://scripts/fight/collision_debug_fill.gd" id="4_ry7hn"]
 
 [sub_resource type="Animation" id="Animation_ry7hn"]
 length = 0.001
@@ -92,15 +94,18 @@ _data = {
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_hit"]
 size = Vector2(15, 15)
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hurt"]
+size = Vector2(16, 28)
+
 [node name="Mimic" type="Node2D" unique_id=1966208949]
 scale = Vector2(2, 2)
 script = ExtResource("1_ry7hn")
 
 [node name="Sprite" type="AnimatedSprite2D" parent="." unique_id=1735163071]
 sprite_frames = ExtResource("2_ry7hn")
-animation = &"attack"
+animation = &"idle"
 autoplay = "idle"
-offset = Vector2(-4, -64)
+offset = Vector2(-1.5, -64)
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1731415349]
 libraries/ = SubResource("AnimationLibrary_7v5mt")
@@ -111,8 +116,28 @@ visible = false
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox" unique_id=1931459385]
 position = Vector2(14, -29.5)
 shape = SubResource("RectangleShape2D_hit")
-debug_color = Color(0.91057897, 0.000108005406, 0.7312848, 0.41960785)
+debug_color = Color(0.91, 0, 0.73, 0.42)
 
 [node name="DebugFill" type="Polygon2D" parent="Hitbox/CollisionShape2D" unique_id=1931459386]
-color = Color(0.91057897, 0.000108005406, 0.7312848, 0.41960785)
+color = Color(0.91, 0, 0.73, 0.42)
 polygon = PackedVector2Array(-7.5, -7.5, 7.5, -7.5, 7.5, 7.5, -7.5, 7.5)
+script = ExtResource("4_ry7hn")
+
+[node name="Hurtbox" type="Area2D" parent="." unique_id=2000000001]
+visible = false
+scale = Vector2(2.5420148, 0.84000087)
+script = ExtResource("3_ry7hn")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox" unique_id=2000000002]
+position = Vector2(0, -14)
+shape = SubResource("RectangleShape2D_hurt")
+debug_color = Color(0.2, 0.9, 0.2, 0.42)
+
+[node name="DebugFill" type="Polygon2D" parent="Hurtbox/CollisionShape2D" unique_id=2000000003]
+color = Color(0.2, 0.9, 0.2, 0.42)
+polygon = PackedVector2Array(-8, -14, 8, -14, 8, 14, -8, 14)
+script = ExtResource("4_ry7hn")
+
+[node name="ProjectileOrigin" type="Marker2D" parent="." unique_id=2000000004]
+visible = false
+position = Vector2(0, -11.5)

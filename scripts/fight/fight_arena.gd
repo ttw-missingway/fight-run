@@ -137,6 +137,8 @@ func _set_debug_visibility(enabled: bool) -> void:
 	for child in get_children():
 		if child is Fighter:
 			child.set_debug_visible(enabled)
+		elif child is FightProjectile:
+			child.set_debug_visible(enabled)
 
 
 func _on_lives_changed(fighter: Fighter, lives: int) -> void:

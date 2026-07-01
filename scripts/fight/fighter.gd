@@ -37,7 +37,6 @@ const JUGGLE_ADVANCE_KNOCKBACK_RATIO := 1.0
 const DEFAULT_JUGGLE_KNOCKBACK_SCALE := 0.35
 const HIT_FLASH_DURATION := 0.1 * CombatTiming.FIGHT_TIMING_SCALE
 const CHARGE_FLASH_DURATION := 0.18 * CombatTiming.FIGHT_TIMING_SCALE
-const CHARGE_FLASH_TIME_FRACTION := 0.5
 const FULL_HOP_HOLD_FRAMES := 4
 
 # Shared fallbacks. A character's FighterStats can override any of these; when a
@@ -114,8 +113,10 @@ var stagger_meter_label: Label
 
 #region Private state
 
+var _rig: Node
 var _anim_player: AnimationPlayer
 var _rig_hitbox: Area2D
+var _rig_hurtbox: FightHurtbox
 var _animation_driven: bool = false
 var _rig_hit_victims: Dictionary = {}
 var _last_move_tap_direction: int = 0
@@ -130,11 +131,7 @@ var _virtual_attack_name: String = ""
 var _virtual_guard: bool = false
 var _virtual_down: bool = false
 var _virtual_throw: bool = false
-var _virtual_projectile_charge: float = -1.0
-var _virtual_projectile_low: bool = false
-var _projectile_charging: bool = false
-var _projectile_auto_release: bool = false
-var _await_projectile_release: bool = false
+var _projectile_launcher: FighterProjectileLauncher
 var _was_on_floor_last_frame: bool = false
 var _ledge_crouch_carry: bool = false
 var _airborne_crouch_frames: int = 0
@@ -144,7 +141,6 @@ var _external_displacement_frames: int = 0
 var _hitstop_frames: int = 0
 var _hit_flash_timer: float = 0.0
 var _charge_flash_timer: float = 0.0
-var _charge_half_flashed: bool = false
 var _flash_material: ShaderMaterial
 var _air_forward_combo_step: int = 0
 var _jump_hold_frames: int = 0
@@ -170,6 +166,11 @@ func _ready() -> void:
 	state_machine.name = "StateMachine"
 	add_child(state_machine)
 	state_machine.setup(self)
+
+	_projectile_launcher = FighterProjectileLauncher.new()
+	_projectile_launcher.name = "ProjectileLauncher"
+	add_child(_projectile_launcher)
+	_projectile_launcher.setup(self)
 
 	hurtbox.setup(self)
 	hitbox.setup(self)
@@ -230,7 +231,7 @@ func _physics_process(delta: float) -> void:
 	_apply_gravity(delta)
 	_poll_double_tap_dash()
 	_apply_movement(delta)
-	_handle_projectile_input(delta)
+	_projectile_launcher.tick(delta)
 	_poll_dash_attack_input()
 	_update_jump_hold_tracking()
 	_handle_actions()
@@ -341,10 +342,7 @@ func set_virtual_input(
 	_virtual_throw_direction = throw_direction
 	if attack_name != "":
 		_virtual_attack_name = attack_name
-	if projectile_charge >= 0.0:
-		_virtual_projectile_charge = projectile_charge
-	if projectile_low:
-		_virtual_projectile_low = true
+	_projectile_launcher.set_virtual_fire(projectile_charge, projectile_low)
 
 
 ## Clears all synthetic input back to neutral.
@@ -476,9 +474,27 @@ func consume_combo_follow_up() -> AttackData:
 
 ## Fires the charged projectile and ends the startup phase; called when projectile startup finishes.
 func complete_projectile_startup() -> void:
-	var low_angle := state_machine.is_projectile_low_angle()
-	_fire_projectile(state_machine.projectile_pending_charge, low_angle)
-	state_machine.finish_projectile_startup()
+	_projectile_launcher.fire_charged()
+
+
+## Returns true when the fighter's attack intent is currently held (input or virtual).
+func is_attack_intent_held() -> bool:
+	return _is_attack_intent_held()
+
+
+## Returns true when the down/crouch input is currently pressed (input or virtual).
+func is_down_pressed() -> bool:
+	return _is_down_pressed()
+
+
+## Resets the air-forward combo chain.
+func clear_air_forward_combo() -> void:
+	_clear_air_forward_combo()
+
+
+## Returns the instanced visual rig node, or null if no rig was loaded.
+func get_rig() -> Node:
+	return _rig
 
 
 ## Begins a neutral wakeup from knockdown (the fast get-up option).
@@ -685,6 +701,7 @@ func receive_hit(attacker: Fighter, attack_data: AttackData) -> void:
 		AttackData.HitType.KILL:
 			_kill()
 
+	pulse_hit_flash()
 	if not is_player_controlled and ai_controller.enabled:
 		ai_controller.notify_took_damage()
 
@@ -749,11 +766,12 @@ func respawn_at(spawn_position: Vector2) -> void:
 	# Drop back in squared up against the opponent; free turning resumes from there.
 	face_opponent()
 	visible = true
-	hurtbox.monitorable = true
+	hurtbox.monitorable = _rig_hurtbox == null
+	if _rig_hurtbox != null:
+		_rig_hurtbox.monitorable = true
 	state_machine.enter_respawn()
 	_input_buffer.reset()
-	_projectile_charging = false
-	_projectile_auto_release = false
+	_projectile_launcher.reset()
 	move_and_slide()
 	respawned.emit(self)
 	_update_visuals()
@@ -799,15 +817,22 @@ func is_ledge_crouch_airborne() -> bool:
 	return _ledge_crouch_carry and not is_on_floor()
 
 
+## Returns true when debug overlays are currently enabled.
+func is_debug_enabled() -> bool:
+	return _debug_enabled
+
+
 ## Toggles the hurt/hit/grab box debug overlays.
 func set_debug_visible(enabled: bool) -> void:
 	_debug_enabled = enabled
 	hurtbox_debug.visible = enabled
 	hitbox_debug.visible = enabled and hitbox.monitoring
 	grabbox_debug.visible = enabled and grabbox.monitoring
-	# Animation-driven rigs draw their attack box from the rig Hitbox, not hitbox_debug.
+	# Animation-driven rigs draw their boxes from rig nodes, not the shared debug rects.
 	if _animation_driven and _rig_hitbox != null:
 		_rig_hitbox.visible = enabled and _rig_hitbox.monitoring
+	if _rig_hurtbox != null:
+		_rig_hurtbox.visible = enabled
 	if enabled and state_machine != null and state_machine.current_attack != null:
 		_update_hitbox_debug(state_machine.current_attack)
 	if enabled and state_machine != null and state_machine.current_grab != null:
@@ -866,10 +891,12 @@ func _instance_visual_rig() -> void:
 		body_rect.visible = true
 		return
 	var rig := stats.visual_scene.instantiate()
+	_rig = rig
 	facing_pivot.add_child(rig)
 	body_rect.visible = false
 	_setup_rig_flash(rig)
 	_setup_animation_driven_hitbox(rig)
+	_setup_animation_driven_hurtbox(rig)
 
 
 # Shares one white-flash ShaderMaterial across every sprite in the rig so the hit
@@ -899,6 +926,20 @@ func _setup_animation_driven_hitbox(rig: Node) -> void:
 	rig_hitbox.collision_layer = 8
 	rig_hitbox.collision_mask = 4 | 16
 	rig_hitbox.monitoring = false   # the attack animation turns this on per frame
+
+
+# If the rig carries a "Hurtbox" Area2D with FightHurtbox script, it replaces the shared
+# FacingPivot/Hurtbox for hit detection. FightHurtbox only references CharacterBody2D, so
+# attaching it directly in the rig scene carries no import-cycle risk (unlike FightHitbox).
+func _setup_animation_driven_hurtbox(rig: Node) -> void:
+	var rig_hurtbox := rig.get_node_or_null(^"Hurtbox") as FightHurtbox
+	if rig_hurtbox == null:
+		return
+	_rig_hurtbox = rig_hurtbox
+	rig_hurtbox.setup(self)
+	# Retire the shared box so only one hurtbox is monitorable at a time.
+	hurtbox.monitorable = false
+	hurtbox_shape.disabled = true
 
 
 # Polls the animation-driven rig hitbox while it's live. Rescanning every physics frame
@@ -1391,7 +1432,7 @@ func _handle_actions() -> void:
 	if _try_execute_action_queue():
 		return
 
-	if _consume_virtual_projectile_fire():
+	if _projectile_launcher.consume_virtual_fire():
 		return
 
 
@@ -1471,10 +1512,7 @@ func _execute_buffered_intent(intent: FightInputBuffer.Intent) -> bool:
 			if _is_attack_intent_held():
 				return false
 			var low_angle := bool(data.get("down", _is_down_pressed()))
-			_projectile_auto_release = not Input.is_action_pressed("projectile")
-			_clear_air_forward_combo()
-			state_machine.begin_projectile_charge(low_angle)
-			_projectile_charging = true
+			_projectile_launcher.begin_buffered_charge(low_angle)
 			return true
 		FightInputBuffer.Intent.GUARD:
 			if not is_on_floor() or not state_machine.can_hold_guard():
@@ -1632,97 +1670,6 @@ func _begin_retreat_jump_attack(attack: AttackData) -> void:
 	velocity.y = attack.retreat_hop_velocity.y
 	_clear_air_forward_combo()
 	state_machine.start_attack(attack)
-
-
-func _handle_projectile_input(delta: float) -> void:
-	if state_machine.current_state == FighterStateMachine.State.PROJECTILE_CHARGE:
-		state_machine.tick_projectile_charge(delta)
-		if state_machine.projectile_startup_remaining > 0.0:
-			return
-		if not _charge_half_flashed and state_machine.get_projectile_charge_time_fraction() >= CHARGE_FLASH_TIME_FRACTION:
-			_charge_half_flashed = true
-			pulse_charge_flash()
-		if _projectile_auto_release and not _is_projectile_pressed():
-			_release_projectile_charge()
-			return
-		var fully_charged := state_machine.is_projectile_fully_charged()
-		if _is_projectile_released() or fully_charged:
-			# A full-charge shot auto-fires; require a button release before the next
-			# charge so a continued hold can't immediately spawn a second coin.
-			if fully_charged:
-				_await_projectile_release = true
-			_release_projectile_charge()
-		return
-
-	if _projectile_charging:
-		_projectile_charging = false
-
-	if not state_machine.can_use_projectile():
-		return
-
-	if stats.projectile_config == null:
-		return
-
-	if _virtual_projectile_charge >= 0.0:
-		return
-
-	if _is_attack_intent_held():
-		return
-
-	if _await_projectile_release:
-		if not _is_projectile_pressed():
-			_await_projectile_release = false
-		return
-
-	if _is_projectile_pressed():
-		_projectile_auto_release = Input.is_action_just_pressed("projectile")
-		_clear_air_forward_combo()
-		state_machine.begin_projectile_charge(_is_down_pressed())
-		_projectile_charging = true
-		_charge_half_flashed = false
-
-
-func _release_projectile_charge() -> void:
-	var charge_ratio := state_machine.get_projectile_charge_ratio()
-	state_machine.begin_projectile_release(charge_ratio)
-	_projectile_charging = false
-	_projectile_auto_release = false
-
-
-func _fire_projectile(charge_ratio: float, low_angle: bool = false) -> void:
-	if stats.projectile_config == null:
-		return
-	var projectile := stats.projectile_config.projectile_scene.instantiate() as FightProjectile
-	get_parent().add_child(projectile)
-	projectile.setup(self, charge_ratio, stats.projectile_config, low_angle)
-
-
-func _consume_virtual_projectile_fire() -> bool:
-	if _virtual_projectile_charge < 0.0:
-		return false
-	if not state_machine.can_use_projectile():
-		_virtual_projectile_charge = -1.0
-		return false
-	var charge := clampf(_virtual_projectile_charge, 0.0, 1.0)
-	_virtual_projectile_charge = -1.0
-	state_machine.begin_projectile_charge(_virtual_projectile_low)
-	state_machine.begin_projectile_release(charge)
-	_virtual_projectile_low = false
-	return true
-
-
-func _is_projectile_pressed() -> bool:
-	if not is_player_controlled:
-		return false
-	if Input.is_action_pressed("attack"):
-		return false
-	return Input.is_action_pressed("projectile")
-
-
-func _is_projectile_released() -> bool:
-	if not is_player_controlled:
-		return false
-	return Input.is_action_just_released("projectile")
 
 
 func _snap_feet_to_ground(x: float = -1.0) -> void:
@@ -1948,6 +1895,8 @@ func _kill() -> void:
 	state_machine.clear_oki_punish_window()
 	visible = false
 	hurtbox.set_deferred("monitorable", false)
+	if _rig_hurtbox != null:
+		_rig_hurtbox.set_deferred("monitorable", false)
 	state_machine.enter_dead()
 	if fight_manager == null or not fight_manager.infinite_lives:
 		lives -= 1
@@ -2121,6 +2070,14 @@ func _uses_roll_stance() -> bool:
 
 
 func _update_hurtbox_profile() -> void:
+	if _rig_hurtbox != null:
+		# Rig hurtbox owns hit detection; only the physics body shape needs stance updates.
+		if _uses_roll_stance():
+			_apply_stance_collision(body_collision_shape, ROLL_HURTBOX_SIZE, ROLL_HURTBOX_OFFSET)
+		else:
+			_apply_stance_collision(body_collision_shape, _uses_crouch_stance())
+		return
+
 	if _uses_roll_stance():
 		_apply_stance_collision(body_collision_shape, ROLL_HURTBOX_SIZE, ROLL_HURTBOX_OFFSET)
 		_apply_stance_collision(hurtbox_shape, ROLL_HURTBOX_SIZE, ROLL_HURTBOX_OFFSET)

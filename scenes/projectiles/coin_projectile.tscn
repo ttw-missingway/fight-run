@@ -1,0 +1,49 @@
+[gd_scene format=3 uid="uid://dxwq5tse7otvj"]
+
+[ext_resource type="PackedScene" uid="uid://b11035icliyy" path="res://scenes/fight/projectile.tscn" id="1_4oarj"]
+[ext_resource type="SpriteFrames" uid="uid://ma60b7q6of54" path="res://art/projectiles/coin_projectile_frames.tres" id="2_5p754"]
+[ext_resource type="Script" uid="uid://chrxqjifimwo6" path="res://scripts/projectiles/coin_projectile.gd" id="2_a6jgq"]
+[ext_resource type="Script" uid="uid://cn1ini8ixr1cb" path="res://scripts/fight/collision_debug_fill.gd" id="3_a6jgq"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_flight"]
+size = Vector2(32, 32)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_linger"]
+size = Vector2(32, 32)
+
+[node name="CoinProjectile" unique_id=89764269 instance=ExtResource("1_4oarj")]
+script = ExtResource("2_a6jgq")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." index="0" unique_id=761542513]
+scale = Vector2(2, 2)
+sprite_frames = ExtResource("2_5p754")
+animation = &"fly"
+autoplay = "fly"
+frame_progress = 0.68631446
+
+[node name="FlightShape" parent="." index="1"]
+visible = false
+scale = Vector2(0.65, 0.65)
+shape = SubResource("RectangleShape2D_flight")
+debug_color = Color(0.91, 0, 0.73, 0.42)
+
+[node name="DebugFill" type="Polygon2D" parent="FlightShape" index="0" unique_id=1091517159]
+z_index = 1
+color = Color(0.91, 0, 0.73, 0.42)
+polygon = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
+script = ExtResource("3_a6jgq")
+
+[node name="LingerShape" type="CollisionShape2D" parent="." index="2" unique_id=2097481422]
+visible = false
+scale = Vector2(0.8, 0.8)
+shape = SubResource("RectangleShape2D_linger")
+disabled = true
+debug_color = Color(0.91, 0, 0.73, 0.42)
+
+[node name="DebugFill" type="Polygon2D" parent="LingerShape" index="0" unique_id=1699569177]
+color = Color(0.91, 0, 0.73, 0.42)
+polygon = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
+script = ExtResource("3_a6jgq")
+
+[node name="BodyRect" parent="." index="3"]
+visible = false

@@ -311,6 +311,46 @@ func apply_juggle_hit_lockout(frames: int = JUGGLE_HIT_LOCKOUT_FRAMES) -> void:
 	)
 
 
+## True if the fighter can afford the given mana cost (always true with infinite mana).
+func can_spend_mana(amount: int) -> bool:
+	return _can_spend_mana(amount)
+
+
+## AI entry point: queues a combo-break attempt, consumed on the next physics tick.
+func pulse_virtual_combo_break() -> void:
+	_virtual_down_pulse = true
+
+
+## Called on the opponent of a combo-breaking fighter: interrupts any attack or
+## grab in progress and applies the break pushback.
+func receive_combo_break_push(breaker: Fighter, apart_dir: int = 0) -> void:
+	if breaker == null:
+		return
+	var push_dir := apart_dir
+	if push_dir == 0:
+		push_dir = int(signf(global_position.x - breaker.global_position.x))
+	if push_dir == 0:
+		push_dir = breaker.facing
+	var push_speed := push_dir * stats.combo_break_push_knockback
+	state_machine.interrupt_attack_from_combo_break()
+	state_machine.interrupt_grab_from_combo_break()
+	state_machine.enter_combo_break_push(push_speed)
+	mark_external_displacement(COMBO_BREAK_DISPLACEMENT_FRAMES)
+	if not is_player_controlled and ai_controller.enabled:
+		ai_controller.notify_took_damage()
+
+
+## True when a grab/throw can start right now: grounded and not crouching.
+func can_attempt_throw() -> bool:
+	if not is_on_floor():
+		return false
+	if state_machine.is_crouching():
+		return false
+	if is_crouch_held():
+		return false
+	return true
+
+
 ## Freezes the fighter for the given number of frames on a hit; keeps the longest pending hitstop.
 func apply_hitstop(frames: int) -> void:
 	if frames <= 0:
@@ -844,7 +884,9 @@ func is_debug_enabled() -> bool:
 ## Toggles the hurt/hit/grab box debug overlays.
 func set_debug_visible(enabled: bool) -> void:
 	_debug_enabled = enabled
-	hurtbox_debug.visible = enabled
+	# Rig-driven fighters draw their hurtbox from the rig node; the shared rect is
+	# retired for detection, so drawing it too would show a phantom second hurtbox.
+	hurtbox_debug.visible = enabled and _rig_hurtbox == null
 	hitbox_debug.visible = enabled and hitbox.monitoring
 	grabbox_debug.visible = enabled and grabbox.monitoring
 	# Animation-driven rigs draw their boxes from rig nodes, not the shared debug rects.
@@ -1347,8 +1389,8 @@ func _apply_air_attack_advance(advance: float, delta: float) -> void:
 func _apply_forward_momentum_floor(target_x: float, delta: float, drift_rate: float = 2.5) -> void:
 	if target_x == 0.0:
 		return
-	var forward := signi(signf(target_x))
-	if signi(signf(velocity.x)) == forward:
+	var forward := int(signf(target_x))
+	if int(signf(velocity.x)) == forward:
 		if absf(velocity.x) < absf(target_x):
 			velocity.x = target_x
 		return
@@ -1478,11 +1520,6 @@ func _handle_actions() -> void:
 
 	if _projectile_launcher.consume_virtual_fire():
 		return
-
-
-## True if the fighter can afford the given mana cost (always true with infinite mana).
-func can_spend_mana(amount: int) -> bool:
-	return _can_spend_mana(amount)
 
 
 func _try_execute_action_queue() -> bool:
@@ -1698,11 +1735,6 @@ func _spend_mana(amount: int) -> bool:
 	return true
 
 
-## AI entry point: queues a combo-break attempt, consumed on the next physics tick.
-func pulse_virtual_combo_break() -> void:
-	_virtual_down_pulse = true
-
-
 func _poll_ai_combo_break_input() -> void:
 	if not _is_in_combo_break_state():
 		return
@@ -1783,7 +1815,7 @@ func _try_combo_break() -> void:
 	if push_target == null:
 		return
 
-	var apart_dir := signi(global_position.x - push_target.global_position.x)
+	var apart_dir := int(signf(global_position.x - push_target.global_position.x))
 	if apart_dir == 0:
 		apart_dir = facing
 	var close := absf(push_target.global_position.x - global_position.x) <= stats.combo_break_close_range
@@ -1801,41 +1833,12 @@ func _apply_combo_break_self_push(push_dir: int) -> void:
 	mark_external_displacement(COMBO_BREAK_DISPLACEMENT_FRAMES)
 
 
-## Called on the opponent of a combo-breaking fighter: interrupts any attack or
-## grab in progress and applies the break pushback.
-func receive_combo_break_push(breaker: Fighter, apart_dir: int = 0) -> void:
-	if breaker == null:
-		return
-	var push_dir := apart_dir
-	if push_dir == 0:
-		push_dir = signi(global_position.x - breaker.global_position.x)
-	if push_dir == 0:
-		push_dir = breaker.facing
-	var push_speed := push_dir * stats.combo_break_push_knockback
-	state_machine.interrupt_attack_from_combo_break()
-	state_machine.interrupt_grab_from_combo_break()
-	state_machine.enter_combo_break_push(push_speed)
-	mark_external_displacement(COMBO_BREAK_DISPLACEMENT_FRAMES)
-	if not is_player_controlled and ai_controller.enabled:
-		ai_controller.notify_took_damage()
-
-
 func _try_throw() -> void:
 	if state_machine.current_state == FighterStateMachine.State.GRAB:
 		return
 	if not can_attempt_throw():
 		return
 	state_machine.start_grab(_grab)
-
-
-func can_attempt_throw() -> bool:
-	if not is_on_floor():
-		return false
-	if state_machine.is_crouching():
-		return false
-	if is_crouch_held():
-		return false
-	return true
 
 
 func _try_buffer_combo_input() -> void:

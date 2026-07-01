@@ -606,7 +606,6 @@ func _decide_shoto_behavior(distance: float, target_left: bool, target: Fighter)
 
 
 func _decide_grappler_behavior(distance: float, target_left: bool) -> void:
-	var target := _fighter.opponent
 	_move_toward_target(distance, target_left)
 	if _attack_cooldown > 0.0 or not _fighter.is_on_floor():
 		return

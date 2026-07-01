@@ -29,7 +29,7 @@ const AI_RESPAWN_DELAY := 2.0 * CombatTiming.FIGHT_TIMING_SCALE
 
 #region Exports
 
-@export var stage_profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
+@export var stage_profile: StageProfile = preload("res://data/resources/default_stage_profile.tres")
 @export var arena_bounds: Rect2 = Rect2(-760.0, -240.0, 1520.0, 480.0)
 @export var platform_y: float = 130.0
 @export var platform_left: float = -696.0

@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://dxwq5tse7otvj"]
 
 [ext_resource type="PackedScene" uid="uid://b11035icliyy" path="res://scenes/fight/projectile.tscn" id="1_4oarj"]
-[ext_resource type="SpriteFrames" uid="uid://ma60b7q6of54" path="res://art/projectiles/coin_projectile_frames.tres" id="2_5p754"]
+[ext_resource type="SpriteFrames" uid="uid://ma60b7q6of54" path="res://data/projectiles/coin_projectile_frames.tres" id="2_5p754"]
 [ext_resource type="Script" uid="uid://chrxqjifimwo6" path="res://scripts/projectiles/coin_projectile.gd" id="2_a6jgq"]
 [ext_resource type="Script" uid="uid://cn1ini8ixr1cb" path="res://scripts/fight/collision_debug_fill.gd" id="3_a6jgq"]
 

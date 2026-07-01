@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cuc4hlwilvdj"]
 
-[ext_resource type="SpriteFrames" uid="uid://dsdt5u0i6y26s" path="res://art/effects/projectile_hit_frames.tres" id="1_bypwf"]
+[ext_resource type="SpriteFrames" uid="uid://dsdt5u0i6y26s" path="res://data/effects/projectile_hit_frames.tres" id="1_bypwf"]
 [ext_resource type="Script" uid="uid://ba421aku3ubyt" path="res://scripts/animations/one_shot_effect.gd" id="2_eftt7"]
 
 [node name="Hit" type="AnimatedSprite2D" unique_id=1075208389]

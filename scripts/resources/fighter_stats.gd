@@ -49,7 +49,7 @@ extends Resource
 @export var slow_getup_duration: float = 0.68
 @export var slow_getup_invincible_duration: float = 0.45
 @export var gravity: float = 980.0
-@export var projectile_config: ProjectileConfig = preload("res://scripts/resources/default_projectile_config.tres")
+@export var projectile_config: ProjectileConfig = preload("res://data/resources/default_projectile_config.tres")
 # Per-character move set. Leave any field empty to inherit the shared default
 # (see DEFAULT_* consts in fighter.gd). This is what makes a fighter's identity
 # pure data: swap the .tres, swap the moves — no code changes.

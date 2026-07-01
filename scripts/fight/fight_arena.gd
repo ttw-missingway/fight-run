@@ -14,9 +14,9 @@ const FIGHTER_SCENE := preload("res://scenes/fight/fighter.tscn")
 
 #region Exports
 
-@export var stage_profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
-@export var player_stats: FighterStats = preload("res://scripts/characters/knight_fighter_stats.tres")
-@export var opponent_stats: FighterStats = preload("res://scripts/characters/minotaur_fighter_stats.tres")
+@export var stage_profile: StageProfile = preload("res://data/resources/default_stage_profile.tres")
+@export var player_stats: FighterStats = preload("res://data/characters/knight_fighter_stats.tres")
+@export var opponent_stats: FighterStats = preload("res://data/characters/minotaur_fighter_stats.tres")
 @export var debug_hitboxes: bool = false
 
 #endregion

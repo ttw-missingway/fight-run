@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://tsyr28u1lmms"]
 
 [ext_resource type="Script" uid="uid://djl5jj6j8j7e6" path="res://scripts/characters/character_animator.gd" id="1_ry7hn"]
-[ext_resource type="SpriteFrames" uid="uid://ckgcyv0xmp7vg" path="res://art/characters/mimic/mimic_frames.tres" id="2_ry7hn"]
+[ext_resource type="SpriteFrames" uid="uid://ckgcyv0xmp7vg" path="res://data/characters/mimic_frames.tres" id="2_ry7hn"]
 [ext_resource type="Script" uid="uid://dysnujdq4o0po" path="res://scripts/fight/hurtbox.gd" id="3_ry7hn"]
 [ext_resource type="Script" uid="uid://cn1ini8ixr1cb" path="res://scripts/fight/collision_debug_fill.gd" id="4_ry7hn"]
 

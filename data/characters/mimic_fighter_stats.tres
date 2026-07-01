@@ -1,9 +1,9 @@
 [gd_resource type="Resource" script_class="FighterStats" load_steps=5 format=3 uid="uid://cmg1xp08kuxg3"]
 
-[ext_resource type="Resource" path="res://scripts/projectiles/coin_projectile_config.tres" id="1_u6wag"]
+[ext_resource type="Resource" path="res://data/projectiles/coin_projectile_config.tres" id="1_u6wag"]
 [ext_resource type="Script" uid="uid://byjrhm16nd4kb" path="res://scripts/resources/fighter_stats.gd" id="2_pmrho"]
 [ext_resource type="PackedScene" uid="uid://tsyr28u1lmms" path="res://scenes/characters/mimic.tscn" id="3_i26de"]
-[ext_resource type="Resource" path="res://scripts/resources/attacks/mimic_neutral.tres" id="4_mneut"]
+[ext_resource type="Resource" path="res://data/resources/attacks/mimic_neutral.tres" id="4_mneut"]
 
 [resource]
 script = ExtResource("2_pmrho")

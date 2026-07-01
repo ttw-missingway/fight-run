@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://v26n8aaf7fx0"]
 
 [ext_resource type="Script" uid="uid://djl5jj6j8j7e6" path="res://scripts/characters/character_animator.gd" id="1_df6v6"]
-[ext_resource type="SpriteFrames" uid="uid://bkj7jrqa7y7s2" path="res://art/characters/minotaur/minotaur_frames.tres" id="2_hgroy"]
+[ext_resource type="SpriteFrames" uid="uid://bkj7jrqa7y7s2" path="res://data/characters/minotaur_frames.tres" id="2_hgroy"]
 
 [node name="Minotaur" type="Node2D" unique_id=1966208949]
 scale = Vector2(2, 2)

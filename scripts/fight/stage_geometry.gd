@@ -7,7 +7,7 @@ class_name StageGeometry
 
 #region Exports
 
-@export var profile: StageProfile = preload("res://scripts/resources/default_stage_profile.tres")
+@export var profile: StageProfile = preload("res://data/resources/default_stage_profile.tres")
 
 #endregion
 

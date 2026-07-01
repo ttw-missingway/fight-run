@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://gqsno40jc8b1"]
 
 [ext_resource type="Script" uid="uid://djl5jj6j8j7e6" path="res://scripts/characters/character_animator.gd" id="1_gapps"]
-[ext_resource type="SpriteFrames" uid="uid://dyb43xvcrsa51" path="res://art/characters/knight/knight_frames.tres" id="1_nxpse"]
+[ext_resource type="SpriteFrames" uid="uid://dyb43xvcrsa51" path="res://data/characters/knight_frames.tres" id="1_nxpse"]
 
 [node name="Knight" type="Node2D" unique_id=1966208949]
 scale = Vector2(2, 2)

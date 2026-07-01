@@ -172,7 +172,7 @@ func _select_character(option: OptionButton, stats: FighterStats) -> void:
 # Auto-discovers playable characters by scanning for FighterStats resources, so
 # dropping in a new *_fighter_stats.tres makes it selectable with no code change.
 func _discover_characters() -> Array[Dictionary]:
-	const CHARACTERS_DIR := "res://scripts/characters/"
+	const CHARACTERS_DIR := "res://data/characters/"
 	var found: Array[Dictionary] = []
 	var dir := DirAccess.open(CHARACTERS_DIR)
 	if dir == null:

@@ -43,22 +43,22 @@ const FULL_HOP_HOLD_FRAMES := 4
 # stats field is left empty we drop back to these so existing characters keep
 # working unchanged.
 const DEFAULT_ATTACKS := {
-	"neutral": preload("res://scripts/resources/attacks/jab.tres"),
-	"forward": preload("res://scripts/resources/attacks/forward_strike.tres"),
-	"down": preload("res://scripts/resources/attacks/down_strike.tres"),
-	"anti_air": preload("res://scripts/resources/attacks/anti_air.tres"),
-	"back_overhead": preload("res://scripts/resources/attacks/back_overhead.tres"),
-	"back_retreat": preload("res://scripts/resources/attacks/back_retreat.tres"),
-	"air_neutral": preload("res://scripts/resources/attacks/air_neutral.tres"),
-	"air_forward": preload("res://scripts/resources/attacks/air_forward.tres"),
-	"air_forward_2": preload("res://scripts/resources/attacks/air_forward_2.tres"),
-	"air_forward_3": preload("res://scripts/resources/attacks/air_forward_3.tres"),
-	"air_overhead": preload("res://scripts/resources/attacks/air_overhead.tres"),
-	"air_up": preload("res://scripts/resources/attacks/air_up.tres"),
+	"neutral": preload("res://data/resources/attacks/jab.tres"),
+	"forward": preload("res://data/resources/attacks/forward_strike.tres"),
+	"down": preload("res://data/resources/attacks/down_strike.tres"),
+	"anti_air": preload("res://data/resources/attacks/anti_air.tres"),
+	"back_overhead": preload("res://data/resources/attacks/back_overhead.tres"),
+	"back_retreat": preload("res://data/resources/attacks/back_retreat.tres"),
+	"air_neutral": preload("res://data/resources/attacks/air_neutral.tres"),
+	"air_forward": preload("res://data/resources/attacks/air_forward.tres"),
+	"air_forward_2": preload("res://data/resources/attacks/air_forward_2.tres"),
+	"air_forward_3": preload("res://data/resources/attacks/air_forward_3.tres"),
+	"air_overhead": preload("res://data/resources/attacks/air_overhead.tres"),
+	"air_up": preload("res://data/resources/attacks/air_up.tres"),
 }
-const DEFAULT_DASH_ATTACK := preload("res://scripts/resources/attacks/dash_attack.tres")
-const DEFAULT_WAKEUP_ATTACK := preload("res://scripts/resources/attacks/wakeup_attack.tres")
-const DEFAULT_GRAB := preload("res://scripts/resources/grabs/default_throw.tres")
+const DEFAULT_DASH_ATTACK := preload("res://data/resources/attacks/dash_attack.tres")
+const DEFAULT_WAKEUP_ATTACK := preload("res://data/resources/attacks/wakeup_attack.tres")
+const DEFAULT_GRAB := preload("res://data/resources/grabs/default_throw.tres")
 
 #endregion
 
@@ -159,7 +159,7 @@ var _input_buffer: FightInputBuffer
 
 func _ready() -> void:
 	if stats == null:
-		stats = preload("res://scripts/characters/knight_fighter_stats.tres")
+		stats = preload("res://data/characters/knight_fighter_stats.tres")
 	lives = stats.max_lives
 
 	state_machine = STATE_MACHINE_SCRIPT.new()

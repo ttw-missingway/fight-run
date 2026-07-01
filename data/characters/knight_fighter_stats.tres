@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="FighterStats" format=3 uid="uid://r5pmkr8k3jlr"]
 
 [ext_resource type="Script" uid="uid://byjrhm16nd4kb" path="res://scripts/resources/fighter_stats.gd" id="1"]
-[ext_resource type="Resource" path="res://scripts/resources/default_projectile_config.tres" id="1_gba5v"]
+[ext_resource type="Resource" path="res://data/resources/default_projectile_config.tres" id="1_gba5v"]
 [ext_resource type="PackedScene" uid="uid://gqsno40jc8b1" path="res://scenes/characters/knight.tscn" id="2"]
 
 [resource]
